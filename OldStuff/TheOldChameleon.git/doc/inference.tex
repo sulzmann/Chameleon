@@ -1,0 +1,897 @@
+
+
+\documentclass{article}
+
+\usepackage{latexsym}
+\usepackage{amsmath}
+\usepackage{code}
+
+\pagestyle{plain}
+\textwidth      150mm
+\textheight     210mm
+\oddsidemargin  -2mm
+\evensidemargin -2mm
+
+\newcommand{\LT}{LT}
+\renewcommand{\implies}[0]{\supset}
+%\newcommand{\implies}[0]{\rightarrow}
+\newcommand{\arrow}[0]{\rightarrow}
+\newcommand{\simparrow}[0]{\Longleftrightarrow} 
+\newcommand{\proparrow}[0]{\Longrightarrow}
+\newcommand{\rightarrowtail}{\longrightarrow}
+
+\newcommand{\ms}[1]{%%\marginpar{\sc ms} 
+                   {\bf MS:#1}}
+
+
+\newtheorem{lemma}{Lemma}
+
+\newtheorem{ex}{Example}
+\newenvironment{example}{
+        \begin{ex}\rm}%
+        {\hfill$\Box$\end{ex}}
+
+\newenvironment{ttline}{\begin{trivlist}\item \tt}{\end{trivlist}}
+\newenvironment{ttprog}{\begin{trivlist} %%\small
+            \item \tt
+        \begin{tabbing}}{\end{tabbing}\end{trivlist}}
+
+\newcommand{\gd}[0]{~\rule{0.5mm}{2.5mm}~}
+\newcommand{\tcons}{\, \vdash_{\scriptsize C} \,}
+\newcommand{\tdef}{\, \vdash_{\scriptsize R} \,}
+
+\newcommand{\MRF}{\it MRF}
+\newcommand{\ARF}{\it ARF}
+\newcommand{\NRF}{\it NRF}
+
+\input{macros-ms}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+
+{\huge Type Inference via CHR Solving in Chameleon}
+
+\tableofcontents
+
+\section{Improved Inference for Checking Type Annotations}
+
+
+\fig{f:constraint-lexical2}{Constraint and CHR Generation}{
+\mbox{\bf Constraint Generation:} 
+\bda{c}
+ \tlabel{Var-x} ~~
+  \myirule{ (x:t_1) \in \tenv \sgap \mbox{$t_2$ fresh}}
+          {\tenv, E, x \tcons (t_2= t_1 \gd t_2)}
+~~~~
+ \tlabel{Var-f} ~~
+  \myirule{\mbox{$t, l, l_g$ fresh} ~~\mbox{$(f \in E$ or} \\  \mbox{$f_a \in E$ $f$ non-recursive)} \\
+           C = \{ f(t,l), l = (\llist{\overline{t_x}},l_g)\}}
+   { \{ \overline{x:t_x} \} , E, 
+  f \tcons ( C \gd t)}
+\eda
+\bda{c}
+ \tlabel{VarA-f} ~~
+  \myirule{\mbox{$f_a\in E$  $f$ recursive} \sgap \mbox{$t, l, l_g$ fresh} \sgap
+           C = \{ f_a(t,l), l = (\llist{\overline{t_x},l_g})\}}
+   {  \{ \overline{x:t_x} \} , E, 
+  f \tcons ( C \gd t)}
+
+\vspace{1mm}
+\\ 
+\tlabel{Abs} ~~
+  \myirule{%%\tv(t_1) \subseteq V \\
+            \tenv.x:t_1, E,e \tcons (C \gd t_2) \\ C'=\{C, t_3=t_1\arrow t_2 \} \sgap \mbox{$t_3$ fresh}}
+          {\tenv, E,\lambda x::t_1.e \tcons (C' \gd t_3)}
+~~~~
+\tlabel{App} ~~ \myirule{\tenv, E,e_1 \tcons (C_1 \gd t_1) 
+          \\ \tenv, E,e_2 \tcons (C_2 \gd t_2)
+       \sgap \mbox{$t_3$ fresh}}
+         {\tenv, E,e_1~e_2 \tcons 
+       (C_1,C_2,t_1=t_2 \arrow t_3 \gd t_3)}
+
+\vspace{1mm}
+\\
+\tlabel{Let} ~~ \myirule{\tenv, E\cup\{g\},e_2 \tcons (C \gd t)}
+         {\tenv, E, \LET\ g = e_1 ~\IN\ e_2 \tcons (C \gd t)}
+~~~~
+\tlabel{LetA}  ~~
+\myirule{        \tenv, E\cup \{g_a\}, e_2 \tcons (C \gd t)}
+             {\tenv,   E,\LET\ 
+             \ba{l} g :: C_1 \Rightarrow t_1 \\ g = e_1 \ea ~\IN\ e_2 
+           \tcons (C \gd t)}
+\eda
+%
+\mbox{\bf CHR Generation:} 
+\bda{c}
+  \tlabel{Var} ~~
+  h, \tenv, E,v \tdef \emptyset
+~~~~
+ \tlabel{App} ~~
+  \myirule{h, \tenv, E,e_1 \tdef P_1 \\ h, \tenv, E,e_2 \tdef P_2}
+          {h, \tenv, E,e_1~e_2 \tdef P_1 \cup P_2}
+~~~~
+ \tlabel{Abs} ~~
+ \myirule{h, \tenv.x:t, E,e \tdef P }
+         {h, \tenv, E,\lambda x::t.e \tdef P}
+
+\vspace{2mm}
+\\ 
+ \tlabel{Let} ~~
+   \myirule{      \tenv = \{ x_1 : t_1,\ldots,x_n : t_n \}
+           \sgap \mbox{$t,t_2',l,lr,lg$ fresh} \\ g,\tenv, E, e_1 \tdef P_1 
+             \sgap h, \tenv, E\cup\{g\}, e_2 \tdef P_2 \sgap  \tenv, E,e_1 \tcons (C_1' \gd t_1') 
+          \\ P = P_1 \cup P_2 \cup 
+        \{ g(t,l) \simparrow C_1',t_1'=t,l=(\llist{t_1,\ldots,t_n | lr},\LT), h(t_2',l)_{\ominus} \} }
+         {h, \tenv,E,\LET\ g = e_1 ~\IN\ e_2 \tdef P}
+
+\vspace{2mm}
+ \\ 
+ \tlabel{LetA} ~~~
+  \myirule{ 
+            \tenv = \{ x_1 : t_1,\ldots,x_n : t_n \}            \sgap \mbox{$t,t_2',l,l_r$ fresh}
+         \\ g, \tenv, E\cup\{g_a\}, e_1 \tdef P_1 \sgap h, \tenv, E\cup\{g_a\}, e_2 \tdef P_2
+          \sgap \tenv, E\cup\{g_a\}, e_1 \tcons (C'_1 \gd t'_1)
+          \\    P= P_1 \cup P_2 \cup \\
+         \left \{ \ba{lcl}
+       g_a(t,l) & \simparrow  & t=t''_1, C''_1, l=(\llist{t_1,...,t_n|lr},\LT), h(t_2',l)_{\ominus}
+       \\ g(t,l) & \simparrow &   
+       l=(\llist{t_1,\ldots.t_n | lr},\LT ), g_a(t,l), C'_1, t=t'_1 
+           \ea
+          \right \} 
+       }
+        {h, \tenv,   E,\LET\ 
+             \ba{l} g :: C''_1 \Rightarrow t''_1 \\ g = e_1 \ea ~\IN\ e_2 \tdef P}
+\eda
+}
+
+We give a brief description. Check ``Improved Inference for Checking Type Annotations'' (FP/chr/principal-annotations/tr.tex)
+for details.
+The translation to CHRs is described in Figure~\ref{f:constraint-lexical2}{Constraint and CHR Generation}.
+
+\subsection{CHR Solving}
+
+We assume simplified version of our justified CHR semantics.
+We assume that each constraint is attached with either a $_{\ominus}$ marker 
+or a $_{\epsilon}$ (pronounced empty) marker.
+We refer to constraints carrying a $_{\ominus}$ marker as {\em marked} constraints.
+Note that empty markers refer to justifications 
+only containing positive numbers (we use numbers to represent justifications) whereas
+marked constraints carry at least one negative number.
+
+
+\begin{definition}[Marked CHR Application]
+Let  $d= (U~\bar{t})_a$ (or $d= f(\bar{t})_a$) be a primitive constraint where $a\in \{ _{\ominus}, _{\epsilon} \}$. 
+We define $mark(d)=a$. 
+We write $d_{\ominus}$  to denote $(U~\bar{t})_{\ominus}$ (or $f(\bar{t})_{\ominus}$).
+
+Let $(R)~~c_1,...,c_n \proparrow d_1, ..., d_m \in P$ and $C$ be a constraint.
+                   Let $\phi$ be the m.g.u.~of all equations in $C$. Let $c'_1,...,c'_n\in C$ such that there exists a substitution $\theta$
+                   on variables in rule (R) such that $\theta(c_i)=\phi(c'_i)$ for $i=1...n$. 
+                    Then, $C \rightarrowtail_R C,d'_1,...,d'_m$
+                   where \bda{lcl}  d'_i & = & 
+                             \left \{ \ba{ll} d_i & \mbox{if $mark(c'_j) \not= {}_{\ominus}$ for $j=1...n$} \\
+                                              (d_i)_{\ominus} & \mbox{otherwise}
+                                      \ea
+                             \right .
+                         \eda
+
+Let $(R)~~c \simparrow d_1, ..., d_m \in P$ and $C$ be a constraint.
+                   Let $\phi$ be the m.g.u.~of all equations in $C$. Let $c'\in C$ such that there exists a substitution $\theta$
+                   on variables in rule (R) such that $\theta(c)=\phi(c')$, that is user-defined constraint $c'$ {\em matches}
+                   the left-hand side of rule (R). Then, $C \rightarrowtail_R C-c',d'_1,...,d'_m$
+                   where $d'_i$ are as above.
+\end{definition}
+
+
+We denote by $\NRF$ the set of all non-recursive functions, by $\MRF$ the set of all recursive functions which carry no type annotations and
+by $\ARF$ the set of all annotated recursive functions.
+
+\begin{definition}[CHR Cycle Removal] 
+Let $f(t,l)_{\ominus} \in C$ and $f(t',l')_{\ominus} \in C'$ where $f \in \NRF\cup\ARF$ and a derivation
+            $... \rightarrowtail C \rightarrowtail ... \rightarrowtail C'$.
+  Then, $... \rightarrowtail C \rightarrowtail ... \rightarrowtail C' \rightarrowtail_{CCR} C'-f(t',l')_{\ominus}$.
+
+
+Let $f(t,l) \in C$ and $f(t',l')_{\ominus} \in C'$ where $f \in \MRF$ and a derivation
+            $... \rightarrowtail C \rightarrowtail ... \rightarrowtail C'$.
+  Then, $... \rightarrowtail C \rightarrowtail ... \rightarrowtail C' \rightarrowtail_{CCR} C'-f(t',l')_{\ominus},t'=t$.
+
+
+Let $f(t,l) \in C$ and $f(t',l') \in C'$ where $f \in \MRF$ and $f(t',l')$ is
+known to arise from the exact same program source location as $f(t,l)$, 
+and given a derivation
+            $... \rightarrowtail C \rightarrowtail ... \rightarrowtail C'$.
+  Then, $... \rightarrowtail C \rightarrowtail ... \rightarrowtail C' \rightarrowtail_{Mono} C'-f(t',l'),t'=t$.
+
+We assume that $\rightarrowtail_{CCR}$ and $\rightarrowtail_{Mono}$ are applied aggressively.
+\end{definition}
+
+\subsection{Type Inference via CHR Solving}
+
+Consider type inference for an expression $e$ w.r.t.~an environment $\tenv$ of lambda-bound variables
+and an environment $\tenv_{init}$ of primitive functions and
+type class theory $P_p$. We assume $(P_{int},E_{int})$ model $\tenv_{init}$
+such that for each $f:\forall \bar{a}.C \Rightarrow t'$ we find $f(t,l) \simparrow C,t=t' \in P_{init}$
+and $f\in E_{init}$.
+Then, we generate $\tenv, e \tcons (C \gd t)$ and 
+$h,\tenv, E_{init}, e \tdef P_e$. We generally assume that $P$ denotes $P_p \cup P_e \cup P_{init}$.
+
+
+For typability we need to check that (1) constraint $C$ is satisfiable, and
+(2) all type annotations in $e$ are correct.
+We are now in the position to describe CHR-based satisfiability and subsumption
+check procedures.
+
+
+\begin{definition}[Satisfiability Check] \label{def:sat} \mbox{} \\
+Let $P$ be a set of CHRs and $C$ a constraint such that
+$C \rightarrowtail^*_P C'$ for some constraint $C'$.
+We say that $C$ is satisfiable iff the unifier of all equations in $C'$ exists.
+\end{definition}
+
+Let $E_{sub(e)}$ be the set of all predicate symbols $g_a$ where each $g_a$ refers to
+some subexpression $(\LET\ g :: C_1 \Rightarrow t_1; g = e_1 ~\IN\ e_2)$ in $e$.
+Let $F_{sub(e)}$ be a formula such that $\forall t,l.(g_a(t,l)\leftrightarrow g(t,l)) \in F_{sub(e)}$
+for all $g_a \in E_{sub(e)}$.
+It remains to verify that  the type annotation is correct under the abstraction of type inference in terms of $P$.
+Formally, we need to verify that
+$P \models F_{sub(e)}$ where $P$ refers to first-order logic 
+interpretation of the set of CHRs $P$. 
+
+We write $\bar{\exists}_{t,l}.C$ to denote
+$\exists\tv(C)-\{t,l\}.C$.
+%%MS: use now <-> from the start
+%%Note that $(\forall t,l.g_a(t,l)\implies g(t,l))$ iff 
+%%$(\forall t,l.g_a(t,l)\leftrightarrow g(t,l)$ w.r.t.~$P$. 
+%%Recall that we include the annotation CHR on the rhs of each definition CHR.
+
+\begin{definition}[Subsumption Check] \label{def:sub}
+Let $g_a\in E_{sub(e)}$ and $P$ be a set of CHRs.
+We say that {\tt g}'s annotation is correct iff
+(1) we execute $g_a(t,l) \rightarrowtail^*_P C_1$
+and $g(t,l) \rightarrowtail^*_P C_2$,
+(2) we have that $\models (\bar{\exists}_{t,l}.C_1) \leftrightarrow  (\bar{\exists}_{t,l}.C_2)$.
+\end{definition}
+
+\begin{definition}[Building of Type Schemes]
+Let $P$ be a set of CHRs, {\tt g} a function symbol.
+We say function {\tt g} has type $\forall\alphavec.C'\Rightarrow t'$ w.r.t.~$P$ iff
+(1) We have that $g(t, l) \rightarrowtail^* C,l=(l_l,l_g)$ for some constraint $C$,
+(2) $\phi$, the m.g.u.~of $C,l=(l_l,l_g)$ exists,  
+(3) let $D\subseteq \phi(C)$ such that
+$D$ is maximal and $D$ consists of unmarked user-defined constraints only,
+(4) let $\bar{a} = \tv(D, \phi t) - \tv(\phi l_l)$,
+(5) let $C'=\phi(C)$ and $t'=\phi(t)$.
+\end{definition}
+
+\subsection{Variations}
+
+\subsubsection{``Strict'' Inference}
+\label{sec:strict}
+
+We may not constrain the types of lambda-bound variables in case we never ``call'' a function.
+
+\begin{example}
+Consider:
+
+\begin{ttprog}
+f x = \= let \=g = x x \\
+      \> in  \>x
+\end{ttprog}
+
+We generate CHR rules that look like the following:
+\bda{rcl}
+f(t) & \simparrow & t = t_x \arrow t_x \\
+g(t) & \simparrow & t_x = t_x \arrow t
+\eda
+
+Since the $f$ rule never calls $g$, the unsatisfiable constraint is not
+introduced, and this program is considered well-typed.
+
+\end{example}
+
+This ``laziness'' can be problematic whenever we need to compare the inferred 
+type of some function with its declared type.
+Consider an annotated function $g$, nested within the definition of function
+$f$, from which we generate an inference rule, 
+$g(t,l) \simparrow g_a(t,l), C_i$, and an annotation rule, 
+$g_a(t,l) \simparrow f(t',l')_{\ominus}, C_a$. 
+It's possible that the types of some global variables are affected in $g$, but
+not in $g_a$. 
+In order for $g(t,l)$ and $g_a(t,l)$ to be equivalent, we depend on $g$'s
+context, as called in the $g_a$ rule, to in turn call $g$ and introduce those
+missing constraints.
+
+\begin{example}
+\label{ex:ann-ctxt}
+Consider the following program.
+
+\begin{ttprog}
+f y = \=let \=g~::~Bool \\
+      \>    \>g = y     \\
+      \>in  \>'a'
+\end{ttprog}
+
+We generate the following (simplified) CHR rules:
+\bda{rcl}
+f(t,l) & \simparrow & t = Char,~l = (\llist{}, \llist{t_y}) \\
+g(t,l) & \simparrow & t = t_y,~l = (\llist{t_y}, \llist{t_y}),~g_a(t,l) \\
+g_a(t,l) & \simparrow & t = Bool,~l = (\llist{t_y}, \llist{t_y}),~f(t',l) 
+\eda
+
+Even though {\tt g}'s type annotation is acceptable, out subsumption check
+would fail, because $g(t,l)$ and $g_a(t,l)$ are not equivalent wrt the $l$
+component. 
+Clearly, the $g$ rule implies $t_y = Bool$, but the $g_a$ rule does not.
+
+\end{example}
+
+We can remedy this situation by ensuring that all nested functions are called 
+by their parent function. In this way, when we consider a function annotation,
+the definition of the function becomes part of its context.
+
+\begin{example}
+We modify the program of Example~\ref{ex:ann-ctxt}, forcing {\tt f} to call
+{\tt g}, but disregard its value.
+
+\begin{ttprog}
+f y = \=let \=g~::~Bool \\
+      \>    \>g = y     \\
+      \>in  \>const 'a' g
+\end{ttprog}
+
+The CHR rule associated with {\tt f} would now look something like:
+\bda{rcl}
+f(t,l) & \simparrow & t_{const} = a \arrow b \arrow a, a = Char, t = t_y \arrow a, \\
+       &            & l = (\llist{}, \llist{t_y}),~g(b,l')
+\eda
+
+This solves our immediate problem, in that the constraints arising from
+$g(t,l)$ and $g_a(t,l)$ are now equialent wrt $t$ and $l$.
+
+Unfortunately this does not work in the case where the function we call is
+recursive. Consider:
+
+\begin{ttprog}
+f y = \=let \=g~::~Bool \\
+      \>    \>g = const y g \\
+      \>in  \>'a' 
+\end{ttprog}
+
+Here, if {\tt f} were to call {\tt g}, the constraint generated to represent
+{\tt g}'s type would be $g_a(t',l')$.
+We then face the same problem, that from within $g_a$ we have no association
+between $t_y$ and $Bool$.
+
+\end{example}
+
+Clearly, a syntactic transformation of the source program to introduce calls
+to otherwise uncalled functions is not sufficient.
+We must modify the CHR generation process to directly insert calls to the
+inference constraints of functions which are not already called.
+
+\begin{example}
+We return to the rules generated in Example~\ref{ex:ann-ctxt}.
+The following CHR rule is a modified version of the $f$ rule above which now
+contains a call to $g$, further constraining the lambda-bound type variables.
+
+\bda{rcl}
+f(t,l) & \simparrow & t = Char,~l = (\llist{}, \llist{t_y}),~g(t',l)_{\ominus}
+\eda
+
+Using this modified rule, we see now that $g(t,l)$ and $g_a(t,l)$, are
+equivalent, since $t_y = Bool$ in both.
+The $\ominus$ mark on the $g$ constraint is not significant here, though it
+does accomodates the simpler form of cycle breaking (by simply removing the
+repeated constraint) than the equivalent unmarked constraint would.
+\end{example}
+
+\subsubsection{Alternative Translation Scheme: Add $f_a$ to rhs of definition CHR}
+
+
+(Material can be found in FP/chr/principal-annotations/main.tex)
+Such a translation scheme is strictly weaker.
+Imagine examples
+where the inner annotation $f_a$ needs some global information provided by $p$.
+
+\begin{example} \label{ex:spurious}
+Consider
+\begin{ttprog}
+class Erk a where erk ::~a \\
+class Bar a where bar ::~a  \\
+f = (erk, \= let \= g ::~Foo a=>a \\
+       \>\>       g = bar \\
+     \>     in g)
+\end{ttprog}
+\end{example}
+%
+In some artificial type class extension we impose the condition
+that $P_p = \{ (R)~~Erk ~a, Foo ~b \proparrow Bar~b \}$.
+Here is a sketch of the translation to CHRs.
+\bda{rcl}
+ g_a(t) & \simparrow & f(t')_{\ominus}, Foo~t \\
+ g(t)   & \simparrow & g_a(t), Bar~t \\
+ f(t)   & \simparrow & t=(a,b), Erk~a, g(b)
+\eda
+%
+We find that
+\bda{ll}
+ & g(t_1) \\
+\rightarrowtail_g & g_a(t_1), Bar~t_1 \\
+\rightarrowtail_{g_a} & f(t')_{\ominus}, Foo~t_1, Bar~t_1 \\
+\rightarrowtail_{f}      & \mbox{(add ${}_\ominus$ to rhs)} \\
+ & t'=(a,b), (Erk~a)_{\ominus}, g(b)_{\ominus}, \\ & Foo~t_1, Bar~t_1 \\ 
+\rightarrowtail_g & t'=(a,b), (Erk~a)_{\ominus}, g_a(b)_{\ominus}, (Bar~b)_{\ominus}, \\ & Foo~t_1, Bar~t_1 \\ 
+\rightarrowtail_{g_a} & t'=(a,b), (Erk~a)_{\ominus}, f(t'')_{\ominus}, \\ & (Foo~b)_{\ominus}, (Bar~b)_{\ominus}, Foo~t_1, Bar~t_1 \\ 
+\rightarrowtail_{CCR} & t'=(a,b), (Erk~a)_{\ominus}, (Foo~b)_{\ominus}, \\ & (Bar~b)_{\ominus}, Foo~t_1, Bar~t_1 \\ 
+\rightarrowtail_R & t'=(a,b), (Erk~a)_{\ominus}, (Foo~b)_{\ominus}, \\ & (Bar~b)_{\ominus}, Foo~t_1, Bar~t_1, (Bar~t_1)_{\ominus}
+\eda
+%
+\ms{We unnecessarily break the cycle too late, no harm, but blows up example a bit.}
+Furthermore, we have that
+\bda{ll}
+ & g_a(t_1) \\
+\rightarrowtail_{g_a} & f(s')_{\ominus}, Foo~t_1 \\
+\rightarrowtail_{f} & s'=(c,d), (Erk~c)_{\ominus}, g(d)_{\ominus}, Foo~t_1 \\
+\rightarrowtail_{g} &  s'=(c,d), (Erk~c)_{\ominus}, g_a(d)_{\ominus}, \\ & (Bar~d)_{\ominus}, Foo~t_1 \\
+\rightarrowtail_{g_a} & s'=(c,d), (Erk~c)_{\ominus}, f(s'')_{\ominus}, (Foo~d)_{\ominus}, \\ & (Bar~d)_{\ominus}, Foo~t_1 \\
+\rightarrowtail_{CCR} & s'=(c,d), (Erk~c)_{\ominus}, (Foo~d)_{\ominus}, \\ & (Bar~d)_{\ominus}, Foo~t_1 \\
+\rightarrowtail_R & s'=(c,d), (Erk~c)_{\ominus}, (Foo~d)_{\ominus}, \\ & (Bar~d)_{\ominus}, Foo~t_1, (Bar~t_1)_{\ominus} 
+\eda
+%
+Note that final stores of both derivations are logically equivalent modulo variable $t_1$.
+E.g. we can rename $s'$ to $t'$ and so on. Hence, {\tt g}'s type annotation is correct.
+More importantly, it is crucial to include $f(t')_{\ominus}$ on the rhs of 
+the annotation CHR as suggested by Transformation 3.
+Performing a translation to CHRs guided by Transformation 3' would yield
+$g_a(t_1) \rightarrowtail^* Foo~t_1$. Hence, the subsumption check fails.
+
+
+\subsubsection{Alternative Translation Scheme: Stricly use $f_a$ (if $f$ non-recursive) in case of $f$}
+
+Again weaker scheme, see Ex20 ( ref (ex:ex)) in FP/chr/principal-annotatins/main.tex.
+
+
+\section{Lexically Scoped Type Annotations}
+
+See FP/chr/principal-annotations/main.tex for details.
+
+\fig{f:lexical-constraint}{Constraint Generation for Lexically Scoped Annotations}{
+
+\bda{c}
+\ba{cc}
+
+% \tlabel{VarA-f} &
+%  \myirule{\mbox{$f_a \in E$  $f$ recursive $t, l, l_g, v, v_l, vr$ fresh} \\
+%           C = \{f_a(t,l,v), l = (\llist{\overline{t_x}},l_g), 
+%                      v=(v_l,\llist{\bar{a} |vr})\}}
+%   { \bar{a}, \{\overline{x:t_x} \}, E,
+%  f \tcons ( C \gd t)}
+
+ \tlabel{VarA-f} &
+
+  \myirule{\mbox{$f_a^{\bar{c}} \in E$  $f$ recursive $t, l, l_g, v, v_l$ fresh} \\
+
+           C = \{f_a(t,l,v), l = (\llist{\overline{t_x}},l_g), 
+                      v=(v_l,\llist{\bar{c}})\}}
+   { \bar{a}, \{\overline{x:t_x} \}, E,
+  f \tcons ( C \gd t)}
+
+
+
+\ea
+\\ \\
+\ba{cc}
+ \tlabel{Var-x} & 
+  \myirule{ (x:t_1) \in \tenv \sgap \mbox{$t_2$ fresh}}
+          {V, \tenv, E, x \tcons (t_2= t_1 \gd t_2)}
+\ea
+ ~~~~~
+\ba{cc}
+ \tlabel{Var-f} &
+  \myirule{\mbox{$(f^{\bar{c}}\in E)$ or ($f_a^{\bar{c}} \in E$ $f$ non-recursive)} \\ \mbox{$t, l, l_g, v, v_l$ fresh} \\
+           C = \{ f(t,l,v), l = (\llist{\overline{t_x}},l_g), 
+                      v=(v_l,\llist{\bar{c}})\}}
+   { \bar{a}, \{\overline{x:t_x} \}, E,
+  f \tcons ( C \gd t)}
+\ea
+\\ \\
+\ba{cc}
+\tlabel{Abs} &
+  \myirule{%%\tv(t_1) \subseteq V \\
+            V, \tenv.x:t_1, E, e \tcons (C \gd t_2) \\ \mbox{$t_3$ fresh}}
+          {V, \tenv, E, \lambda x::t_1.e \tcons (C, t_3=t_1\arrow t_2 \gd t_3)}
+\ea
+  ~~~~~
+\ba{cc}
+\tlabel{App} & \myirule{V, \tenv, E, e_1 \tcons (C_1 \gd t_1) 
+          \\ V,\tenv, E, e_2 \tcons (C_2 \gd t_2)
+       \sgap \mbox{$t_3$ fresh}}
+         {V,\tenv, E, e_1~e_2 \tcons 
+       (C_1,C_2,t_1=t_2 \arrow t_3 \gd t_3)}
+\ea
+\\ \\
+\ba{cc}
+\tlabel{Let} & \myirule{V,\tenv, E \cup \{ g \}, e_2 \tcons (C \gd t)}
+         {V,\tenv, E, \LET\ g = e_1 ~\IN\ e_2 \tcons (C \gd t)}
+\ea
+  ~~~~~
+\ba{cc}
+\tlabel{LetA}  &
+\myirule{        V, \tenv, E \cup \{ g_a \}, e_2 \tcons (C \gd t)}
+             {V, \tenv,   E, \LET\ 
+             \ba{l} g :: C_1 \Rightarrow t_1 \\ g = e_1 \ea ~\IN\ e_2 
+           \tcons (C \gd t)}
+\ea
+\\ \\
+\ba{cc}
+\tlabel{LetA2} &
+\myirule{V, \Gamma, E, \LET \ba{l} g :: C_1 \Rightarrow t_1 \\ g = e_1 \ea
+                      ~\IN\ e_2 \tcons (C \gd t)}
+        {V, \Gamma, E, \LET \ba{l} g ::: C_1 \Rightarrow t_1 \\ g = e_1 \ea
+                      ~\IN\ e_2 \tcons (C \gd t)}
+\ea
+
+\eda
+}
+
+
+\fig{f:lexical-rule}{Rule Generation for Lexically Scoped Type Annotations}{
+\bda{c}
+\ba{cc}
+  \tlabel{Var} &
+  h^{\bar{c}}, V, \tenv, E, v \tdef \emptyset
+\ea
+~~~~
+\ba{cc}
+ \tlabel{App} & 
+  \myirule{h^{\bar{c}},V, \tenv, E, e_1 \tdef P_1 \\ h^{\bar{c}}, V, \tenv, E, e_2 \tdef P_2}
+          {h^{\bar{c}},V, \tenv, E, e_1~e_2 \tdef P_1 \cup P_2}
+\ea
+~~~~
+\ba{cc}
+ \tlabel{Abs} &
+ \myirule{h^{\bar{c}},V, \tenv.x:t, E, e \tdef P }
+         {h^{\bar{c}},V, \tenv, E, \lambda x::t.e \tdef P}
+\ea
+\\ \\
+\ba{cc}
+ \tlabel{Let} & 
+   \myirule{ \tenv = \{ x_1 : t_1,\ldots,x_n : t_n \}
+           \sgap V = \{b_1,\ldots,b_m \}  \sgap \mbox{$t,t_2',l,v,v',vl,vl', lr$ fresh} 
+         \\ g^{\bar{b}},V, \tenv, E, e_1 \tdef P_1 \sgap h^{\bar{c}},V, \tenv, E \cup \{g^{\bar{b}}\}, e_2 \tdef P_2 \sgap  
+                 V, \tenv, E, e_1 \tcons (C \gd t') 
+                   \\ \ba{llcl} P = P_1 \cup P_2 \cup & 
+                \{ g(t,l,v) & \simparrow & C,t'=t,
+                 l=(\llist{t_1,\ldots.t_n | lr},\LT), v=(vl,\llist{b_1,...,b_m}),\\
+              & & & h(t_2',l,v')_{\ominus}, v'=(vl',\llist{\bar{c}}) \} 
+          \ea}
+         {h^{\bar{c}},V, \tenv, E, \LET\ g = e_1 ~\IN\ e_2 \tdef P}
+\ea
+ \\ \\
+\ba{cc}
+ \tlabel{LetA} ~~~~~~~\mbox{}&
+  \myirule{ \{a_1,\ldots,a_k\} = \tv(C''_1,t''_1) - \tv(V,\tenv) 
+             \sgap \tenv = \{ x_1 : t_1,\ldots,x_n : t_n \} \sgap
+            V = \{b_1, \ldots, b_m \}
+           \\ \mbox{$lr, t,t_2',l,l_2,v,v',vl',v_2$ fresh} \sgap vl'=V-\bar{c}
+         \\ g^{\bar{b}}, V.\bar{a}, \tenv, E \cup \{g_a^{\bar{b}}\}, e_1 \tdef P_1 \sgap 
+               h^{\bar{c}},V, \tenv, E \cup \{g_a^{\bar{b}}\}, e_2 \tdef P_2
+          \sgap V.\bar{a}, \tenv, E \cup \{g_a^{\bar{b}}\}, e_1 \tcons (C'_1 \gd t'_1)
+
+          \\    P= P_1 \cup P_2 \cup \\
+         \left \{ \ba{lcl}
+       g_a(t,l,v) & \simparrow  & t=t''_1, C''_1, l=(\llist{t_1,...,t_n|lr},\LT), \\
+            &&
+           v= (\llist{a_1,\ldots,a_k},\llist{b_1,\ldots,b_m}),
+          h(t_2',l,v')_{\ominus},v'=(vl',\llist{\bar{c}})
+       \\ g(t,l,v) & \simparrow &   
+       l=(\llist{t_1,\ldots.t_n | lr},\LT ), v= (\llist{a_1,\ldots,a_k},\llist{b_1,\ldots,b_m}), 
+  \\ && g_a(t,l,v), C'_1, t=t'_1 
+           \ea
+          \right \} 
+       }
+        {h^{\bar{c}},V, \tenv,   E, \LET\ 
+             \ba{l} g :: C''_1 \Rightarrow t''_1 \\ g = e_1 \ea ~\IN\ e_2 \tdef P}
+\ea \\
+
+\ba{cc}
+ \tlabel{LetA2} ~~~~~~~\mbox{}&
+  \myirule{ \{a_1,\ldots,a_k\} = \tv(C''_1,t''_1) - \tv(V,\tenv) 
+             \sgap \tenv = \{ x_1 : t_1,\ldots,x_n : t_n \} \sgap
+            V = \{b_1, \ldots, b_m \}
+           \\ \mbox{$lr, t,t_2',l,l_2,v,v',vl',v_2$ fresh} \sgap vl'=V-\bar{c}
+         \\ g^{\bar{b}}, V.\bar{a}, \tenv, E \cup \{g^{\bar{b}}\}, e_1 \tdef P_1 \sgap 
+           h^{\bar{c}},V, \tenv, E \cup \{g^{\bar{b}}\}, e_2 \tdef P_2
+          \sgap V.\bar{a}, \tenv, E \cup \{g^{\bar{b}}\}, e_1 \tcons (C'_1 \gd t'_1)
+
+          \\    P= P_1 \cup P_2 \cup \\
+         \left \{ \ba{lcl}
+       g(t,l,v) & \simparrow &   
+       l=(\llist{t_1,\ldots.t_n | lr},\LT ), 
+       v= (\llist{a_1,\ldots,a_k},\llist{b_1,\ldots,b_m}), 
+  \\ && t=t''_1, C''_1, C'_1, t=t'_1, h(t_2',l,v')_{\ominus},v'=(vl',\llist{\bar{c}})
+           \ea
+          \right \} 
+       }
+        {h^{\bar{c}},V, \tenv,   E, \LET\ 
+             \ba{l} g ::: C''_1 \Rightarrow t''_1 \\ g = e_1 \ea ~\IN\ e_2 \tdef P}
+\ea \\
+
+\eda
+}
+
+With the addition of scoped annotations, the subsumption check described in
+Definition~\ref{def:sub} must be modified slightly. 
+The new check is as follows.
+
+We generate the set of CHRs $P$ from a program, and check the inferred
+type of function $g$ against its declared type by executing 
+$g_a(t,l,v) \rightarrowtail^*_P C_1$ and 
+$g(t,l,v)   \rightarrowtail^*_P C_2$, where 
+$C_1 = C_1' \cup \{l = (l_{l_1}, l_{g_1})\}$ and
+$C_2 = C_2' \cup \{l = (l_{l_2}, l_{g_2})\}$. 
+Let $C_1'' = C_1' \cup \{l = (l_{l_1}, a_1)\}$ and
+    $C_2'' = C_2' \cup \{l = (l_{l_2}, a_2)\}$, where $a_1$ and $a_2$ are fresh
+variables.
+We then check that
+$\models (\bar{\exists}_{t,l,v}. C_1'') \leftrightarrow 
+         (\bar{\exists}_{t,l,v}. C_2'')$.
+
+Essentially we are replacing the $LT$ component of the resulting constraints by 
+fresh variables before testing equivalence.
+The reason we need to do this is that there may be constraints in $C_2$, but
+not in $C_1$, which affect variables bound within $g$, and therefore 
+appear {\em only} within the $LT$ component.
+We only want to test the equivalence of $C_1$ and $C_2$ wrt. unbound
+variables.
+
+
+
+\begin{example}
+Consider the following.
+
+\begin{ttprog}
+test y = \= let \= f~::~d -> Bool \\
+         \>     \> f$_1$ x = isEmpty (y >> return x) \\
+         \> in  f y
+\end{ttprog}
+
+\newcommand{\ellist}{\langle \rangle}
+
+We generate the following (simplified) CHRs from this program.
+\bda{rcl}
+test(t,l,v) & \simparrow & t=t_y=t_r,l=(\_,LT), v=(\_,\llist{}), \\
+            &            & f(t_y\arrow t_r,(\llist{t_y},LT),(\_,\llist{})), \\ 
+f_a(t,l,v)  & \simparrow & t=d \arrow Bool, l=(\llist{t_y|\_},LT), \\ 
+            &            & v=(\llist{d},\llist{}), test(\_,l,v')_{\ominus},v'=(\_,\llist{}) \\
+f(t,l,v)    & \simparrow & f_a(t,l,v), t=t_x \arrow a, \\
+            &            & l=(\llist{ty|\_},LT), v=(\llist{d},\llist{}), ...
+\eda
+
+We run $f_a(t,l,v) \rightarrowtail^* C_1$ and $f(t,l,v) \rightarrowtail^* C_2$.
+Projecting $C_1$ onto $t,l,v$, we get the following
+$t = d \arrow Bool, l = (\llist{t_y|\_}, \llist{t_y,t_x}), v=(\llist{d},\llist{}),...$. 
+Similarly, for $C_2$ we get
+$t = d' \arrow Bool, l = (\llist{t_y'|\_}, \llist{t_y',\underline{d'}}), v=(\llist{d'},\llist{}), ...$
+Note that constraints are not logically equivalent (modulo variables $t$, $l$ and $v$) due to
+the underlined constraint. The definition CHR establishes the fact that $d'$ and $t_x'$ are equal.
+This is expected, since by simple inspection of the above program we see that
+$d$ and the type of {\tt x} are the same.
+However, the annotation CHR cannot establish this connection.
+Clearly, lambda-bound variables which are locally defined should not matter when testing for subsumption.
+Hence, we replace the $LT$ component by some fresh variables.
+Effectively, we compare 
+$t = d \arrow Bool, l = (\llist{t_y|\_}, \_), v=(\llist{d},\llist{}),...$
+an $t = d' \arrow Bool, l = (\llist{t_y'|\_}, \_), v=(\llist{d'},\llist{}), ...$
+which are logically equivalent.
+\end{example}
+
+
+We note that all results stated carry over to lexically scoped type annotations.
+An interesting observation is that our trick to infer as much context information when
+checking type annotations is in particular valuable for lexically scoped type annotations.
+
+\ms{We also say more about the subtle interaction between {\tt ::} and {\tt :::}.}
+
+
+\section{Type Inference via Implication Constraints}
+
+
+
+\fig{f:constraint}{Constraint Generation with Implications}{
+\bda{c}
+ \tlabel{Var-x} ~~
+  \myirule{ (x:t_1) \in \tenv \sgap \mbox{$t_2$ fresh}}
+          {\tenv, E, x \tcons (t_2= t_1 \gd t_2)}
+~~~~
+ \tlabel{Var-f} ~~
+  \myirule{\mbox{$t, l, l_g$ fresh} ~~f \in E \\  
+           C = \{ f(t,l), l = \llist{\overline{t_x}}\}}
+   { \{ \overline{x:t_x} \} , E, 
+  f \tcons ( C \gd t)}
+~~~~
+ \tlabel{VarA-f} ~~
+  \myirule{\mbox{$t, l, l_g$ fresh} ~~f_a\in E  \\ 
+           C = \{ f_a(t,l), l = \llist{\overline{t_x}}\}}
+   {  \{ \overline{x:t_x} \} , E, 
+  f \tcons ( C \gd t)}
+
+\vspace{1mm}
+\\ 
+\tlabel{Abs} ~~
+  \myirule{%%\tv(t_1) \subseteq V \\
+            \tenv.x:t_1, E,e \tcons (C \gd t_2) \\ \mbox{$t_3$ fresh}}
+          {\tenv, E,\lambda x::t_1.e \tcons (C, t_3=t_1\arrow t_2 \gd t_3)}
+~~~~
+\tlabel{App} ~~ \myirule{\tenv, E,e_1 \tcons (C_1 \gd t_1) 
+          \\ \tenv, E,e_2 \tcons (C_2 \gd t_2)
+       \sgap \mbox{$t_3$ fresh}}
+         {\tenv, E,e_1~e_2 \tcons 
+       (C_1,C_2,t_1=t_2 \arrow t_3 \gd t_3)}
+
+\vspace{1mm}
+\\
+\tlabel{Let} ~~ \myirule{\tenv, E\cup\{g\},e \tcons (C \gd t) \\ \tenv=\overline{x:t} \sgap \mbox{$t'$ fresh}}
+         {\tenv, E, \LET\ [g~p_i = e_i]_{i\in I} ~\IN\ e \tcons (g(t',\llist{\bar{t}})_{\ominus},C \gd t)}
+~~~~
+\tlabel{LetA}  ~~
+\myirule{        \tenv, E\cup \{g_a\}, e \tcons (C \gd t) \\
+                 \mbox{$t'$, $l$, $l_g$ fresh} \\
+                  \tenv=\overline{x:t} \sgap \bar{a}=\tv(C_1,t_1)  \\
+                  C' = \{ g(t',\llist{\bar{t}})_{\ominus}, C, ((C_1,t=t_1,l=\llist{\bar{t}}) \implies^{\bar{a}} g(t,l)) \} }
+             {\tenv,   E,\LET\ 
+             \ba{l} g :: C_1 \Rightarrow t_1 \\ \mbox{$[$}g~p_i = e_i\mbox{$]$}_{i \in I}  \ea ~\IN\ e 
+           \tcons (C' \gd t)}
+\vspace{1mm}
+\\
+\tlabel{Case} ~~
+ \myirule{ \tenv, E, p_i \arrow e_i \tcons (C_i \gd t_i) \sgap \mbox{for $i\in I$}  \\
+         \tenv, E, e \tcons (C_e \gd t_e) \sgap \mbox{$t_1, t_2$ fresh} \\ 
+         C = \{ C_e, t_1=t_e \arrow t_2 \} \cup
+           \bigcup_{i\in I} \{ C_i, t_1=t_i \} }
+         {\tenv, E, \CASE\ e~ \OF\ [p_i \arrow  e_i]_{i\in I} \tcons (C \gd t_2)}
+~~~~
+\tlabel{Pat} ~~
+\myirule{p \tcons \forall \bar{b} (D \gd \tenv_p), (C_p \gd t_p) \\ 
+          \tenv \cup \tenv_p, e \tcons (C_e \gd t_e)   \\
+          \tenv = \overline{x:t} \sgap \mbox{$t$ fresh} \\
+            C  =  \{ (D \implies^{\bar{b}} C_e), 
+                t=t_p\arrow t_e, C_p \} }
+         {\tenv, E, p \arrow e \tcons (C \gd t)}
+\eda
+
+\bda{cc}
+ \ba{cc}
+   \tlabel{Pat-Var} &
+   \myirule{\mbox{$t$ fresh}}
+         {x \tcons (True \gd \{x:t\}), (True \gd t)}
+\ea
+ &
+\ba{cc}
+ \tlabel{Pat-Pair} &
+  \myirule{p_1 \tcons \forall \overline{b_1}(D_1 \gd \tenv_{p_1}), (C_1 \gd t_1) \\
+           p_2  \tcons \forall \overline{b_2}(D_2 \gd \tenv_{p_2}), (C_2 \gd t_2)}
+          {(p_1,p_2)  \tcons
+      \forall \overline{b_1,b_2} (D_1,D_2 \gd \tenv_{p_1}\cup \tenv_{p_1}), (C_1,C_2 \gd (t_1,t_2))}
+\ea
+\eda
+\bda{cc}
+ \tlabel{Pat-K} &
+ \myirule{K:\forall\bar{a},\bar{b}.D \Rightarrow t \arrow T~\bar{a} \sgap
+          \\ %%\bar{b} \cap \bar{a} = \emptyset \\          
+          p \tcons \forall \bar{b'}(D' \gd \tenv_p), (C_p \gd t_p)}
+         {K~p \tcons \forall \bar{b'},\bar{b} (D',D \gd \tenv_p), (C_p,t=t_p \gd T~\bar{a})}
+\eda
+
+}
+
+\fig{f:rule}{CHR Generation with Implications}{
+\bda{c}
+  \tlabel{Var} ~~
+  \tenv, E,v \tdef \emptyset
+~~~~
+ \tlabel{App} ~~
+  \myirule{\tenv, E,e_1 \tdef P_1 \\ \tenv, E,e_2 \tdef P_2}
+          {\tenv, E,e_1~e_2 \tdef P_1 \cup P_2}
+~~~~
+ \tlabel{Abs} ~~
+ \myirule{\tenv.x:t, E,e \tdef P }
+         {\tenv, E,\lambda x::t.e \tdef P}
+
+\vspace{2mm}
+\\ 
+\tlabel{Case} ~~
+ \myirule{ \tenv, E, e_i \tdef P_i \sgap \mbox{for $i\in I$}  \\
+           \tenv, E, e \tdef P_e \\
+          P = \bigcup_{i\in I} P_i \cup P_e}
+         {\tenv, E, \CASE\ e~ \OF\ [p_i \arrow  e_i]_{i\in I} \tdef P}
+
+\vspace{2mm}
+\\ 
+ \tlabel{Let} ~~
+\myirule{\tenv = \overline{x:t} \sgap \mbox{$t,t_2',l,lr$ fresh} \\
+         \tenv, E, e_i \tdef P_i \sgap 
+         \tenv, E, p_i \arrow e_i \tcons (C_i \gd t_i) \sgap i\in I \\
+         \tenv, E \cup \{ g \}, e' \tdef P' \\ 
+       P = \bigcup_{i\in I} P_i  \cup P' \cup \\ 
+        \{ g(t,l) \simparrow (\bigcup_{i\in I} C_i,t_i=t) 
+                 ,l=\llist{t_1,\ldots,t_n | lr} \} }
+        {\tenv, E, \LET\ [g~p_i = e_i]_{i\in I} ~\IN\ e' \tdef P}
+
+\vspace{2mm}
+ \\ 
+ \tlabel{LetA} ~~~
+  \myirule{ 
+              \tenv = \overline{x:t}         \sgap \mbox{$t,t_2',l,l_r$ fresh} \\
+      \tenv, E\cup\{g_a\}, e_i \tdef P_i \sgap 
+         \tenv, E\cup\{g_a\}, p_i \arrow e_i \tcons (C_i \gd t_i) \sgap i\in I \\
+            \tenv, E\cup\{g_a\}, e \tdef P'
+          \sgap \tenv, E\cup\{g_a\}, e_1 \tcons (C'_1 \gd t'_1)
+          \\    P= \bigcup_{i\in I} P_i  \cup P' \cup \\
+         \left \{ \ba{lcl}
+       g_a(t,l) & \simparrow  & t=t''_1, C''_1 \\ %%, l=(\llist{t_1,...,t_n|lr},\LT) \\
+       g(t,l) & \simparrow & (\bigcup_{i\in I} C_i,,t_i=t) 
+                 ,l=\llist{t_1,\ldots,t_n | lr}
+           \ea
+          \right \} 
+       }
+        {\tenv,   E,\LET\ 
+             \ba{l} g :: C''_1 \Rightarrow t''_1 \\  \mbox{$[$}g~p_i = e_i\mbox{$]$}_{i \in I} 
+                      \ea ~\IN\ e \tdef P}
+\eda
+}
+
+
+See Figures~\ref{f:constraint} and \ref{f:rule}.
+Note that we check for subsumption locally by generating implication constraints.
+Hence, there's no need anymore to include the ``context'' $h(t_2',l)_{\ominus}$.
+Hence, there's no need anymore for the ``global'' $l$ component.
+Note that the constraint generation rules already enforce ``strict'' inference.
+We call $g(t',\llist{\bar{t}})_{\ominus}$ in rules \tlabel{Let} and \tlabel{LetA}.
+That's the only reason now why we need ``marked'' constraints.
+Optimization: In case there's already a call to $g$, we can omit $g(t',\llist{\bar{t}})_{\ominus}$.
+Note that in case there's a call to $g_a$ omitting $g(t',\llist{\bar{t}})_{\ominus}$ may yield
+a weaker system.
+Consider
+\begin{code}
+rule Bar b, Foo a ==> Bar a
+f = (erk, let g :: Foo a => a
+              g = bar
+          in g)
+\end{code}
+%
+In $f$'s CHR we find the constraint
+$Erk~c, \forall a. (Foo~a \implies Bar~a)$.
+If we use $g$ instead of $g_a$ we also find $Foo~b,Bar~b$. Hence, we can solve the implication constraint.
+
+Performing type inference: Given $(\tenv,e)$ build $\tenv, E e \tdef P$ and $\tenv, E, e \tcons (C \gd t)$.
+Solve $C$ w.r.t. $P$. In case $e$ consists of definitions of the form {\tt f = e} and
+{\tt f::C=>t;f=e} we simply consider {\tt let $e$ in undefined}.
+
+
+Performing type inference for inner definitions:
+Assume (in the interactive environment) we ask for {\tt :t f1;...;fn;g}.
+We solve $g(t,l), f1(t1,l)_{\ominus},...,fn(tn,l)_{\ominus}$.
+
+\section{Coinduction}
+
+We apply the following meta-rule.
+Assume $ ... \rightarrowtail ... C \rightarrowtail ... \rightarrowtail C'$
+such that $a_{i,J}\in C$ and $a_{j,J'}\in C'$ such that $a$ is a user-defined constraint,
+$J$ is a suffix of $J'$ ($J$ may be the emptyset) and $i$ and $j$ are distinct.
+Then, $ ... \rightarrowtail ... C \rightarrowtail ... \rightarrowtail C' \rightarrowtail_{CoInd} C'-a_{j,J'}, True_{j,J'-J,i}$.
+
+The above rule preserves the CHR soundness result.
+Note that $a_{j,J'}$ must be (logically) implied by some constraints in the store.
+
+Rule falls out naturally if we turn all simplification rules into propagation rules and enforce set semantics.
+
+Some ``strange'' cases. Consider $(Eq~a)_1, (Eq~a)_2 \rightarrowtail^* (Eq~a)_1, True_{2,1}$.
+Fine. Could happen in case of ``redundant'' type annotations.
+
+
+
+
+\end{document}

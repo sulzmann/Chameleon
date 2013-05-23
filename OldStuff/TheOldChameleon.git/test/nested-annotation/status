@@ -1,0 +1,27 @@
+
+
+erk-foo-bar.ch:
+
+fine but funny type
+
+
+f' :: (Bar b_[45,32,0,45,42,34,27], Erk a_[45,32,0], Foo b_[45,42,34]) => (a, b)
+
+JW: That's the type I would expect. 
+
+pq.ch:
+
+fine
+
+hasempty.ch:
+
+fails!
+
+JW: 1) there are no Monad instances.
+    2) I don't see how this will work (without annotating test) in our current
+       translation. When it comes to solving the implication, there will be no
+       type class constraints in the assumptions. (We call f_a from test.)
+
+MS: Indeed, this is the example that shows strictly making use of f
+    may yield superior inference!
+

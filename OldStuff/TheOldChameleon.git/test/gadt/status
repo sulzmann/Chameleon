@@ -1,0 +1,20 @@
+
+eval.ch:
+
+fails
+
+JW: I think this should fail, since  0 :: Num a => a, and there's no Num in 
+    any of the assumptions.
+
+MS: correct!
+    (btw, would work if instance Num Int exists)
+
+gadt-fd.ch:
+
+fails
+
+JW: This fails because of the Num constraint and the fact that there
+    are no built-in Num instances. 
+    i.e. It works if you add: rule Num Int <=> True
+
+MS: same thing

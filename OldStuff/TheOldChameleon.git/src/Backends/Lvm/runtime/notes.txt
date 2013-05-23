@@ -1,0 +1,79 @@
+------------------------------------------------------------
+implementation runtime
+------------------------------------------------------------
+
+signals
+-------
+* update signal handling once concurrency is in
+* check how often "pending_signal()" is called
+* signals should be blocked when "pop_pending_signal" is entered
+  but we can't do that on non-posix systems
+
+
+------------------------------------------------------------
+platforms:
+------------------------------------------------------------
+28 may 2001:
+System:
+        descriptor................ powerpc-apple-rhapsody   (MacOSX)
+        architecture.............. 32 bit
+        endianness................ big endian
+
+System:
+        descriptor................ powerpc-apple-macosx
+        architecture.............. 32 bit
+        endianness................ big endian
+
+
+23 may 2001:
+System:
+        descriptor................ alpha-unknown-linux
+        architecture.............. 64 bit
+        endianness................ little endian
+
+System:
+        descriptor................ powerpc-unknown-linux
+        architecture.............. 32 bit
+        endianness................ big endian
+
+System:
+        descriptor................ sparc64-unknown-linux
+        architecture.............. 32 bit
+        endianness................ big endian
+
+System:
+        descriptor................ i686-unknown-linux
+        architecture.............. 32 bit
+        endianness................ little endian
+
+System:
+        descriptor................ i386-unknown-freebsd4.2
+        architecture.............. 32 bit
+        endianness................ little endian
+
+System:
+        descriptor................ i386-unknown-freebsd4.3
+        architecture.............. 32 bit
+        endianness................ little endian
+
+System:
+        descriptor................ i686-unknown-cygwin1.1.4
+        architecture.............. 32 bit
+        endianness................ little endian
+
+System:
+        descriptor................ i386-ms-windows
+        architecture.............. 32 bit
+        endianness................ little endian
+        C compiler used........... gcc -mno-cygwin     (mingw32)
+
+System:
+        descriptor................ i386-ms-windows
+        architecture.............. 32 bit
+        endianness................ little endian
+        C compiler used........... cl /nologo          (visual c++)
+
+System:
+        descriptor................ sparc-sun-solaris2.6
+        architecture.............. 32 bit
+        endianness................ big endian

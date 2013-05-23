@@ -1,0 +1,205 @@
+
+
+\documentclass{article}
+
+\usepackage{latexsym}
+\usepackage{amsmath}
+\usepackage{code}
+
+\pagestyle{plain}
+\textwidth      150mm
+\textheight     210mm
+\oddsidemargin  -2mm
+\evensidemargin -2mm
+
+\newcommand{\LT}{LT}
+\renewcommand{\implies}[0]{\supset}
+%\newcommand{\implies}[0]{\rightarrow}
+\newcommand{\arrow}[0]{\rightarrow}
+\newcommand{\simparrow}[0]{\Longleftrightarrow} 
+\newcommand{\proparrow}[0]{\Longrightarrow}
+\newcommand{\rightarrowtail}{\longrightarrow}
+
+\newcommand{\ms}[1]{%%\marginpar{\sc ms} 
+                   {\bf MS:#1}}
+
+
+\newtheorem{lemma}{Lemma}
+
+\newtheorem{ex}{Example}
+\newenvironment{example}{
+        \begin{ex}\rm}%
+        {\hfill$\Box$\end{ex}}
+
+\newenvironment{ttline}{\begin{trivlist}\item \tt}{\end{trivlist}}
+\newenvironment{ttprog}{\begin{trivlist} %%\small
+            \item \tt
+        \begin{tabbing}}{\end{tabbing}\end{trivlist}}
+
+\newcommand{\solve}{{\it solve}}
+\newcommand{\gd}[0]{~\rule{0.5mm}{2.5mm}~}
+\newcommand{\tcons}{\, \vdash_{\scriptsize C} \,}
+\newcommand{\tdef}{\, \vdash_{\scriptsize R} \,}
+
+\newcommand{\MRF}{\it MRF}
+\newcommand{\ARF}{\it ARF}
+\newcommand{\NRF}{\it NRF}
+
+\input{macros-ms}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+
+\title{Description of latest Chameleon Inference Engine}
+
+\maketitle
+
+\section{Type Inference Framework} \label{sec:inf-framework}
+
+
+\fig{f:type-inference}{Translation to Implication Constraints}{
+\bda{cc}
+ \tlabel{Var} &
+\myirule{(x:\forall\bar{a}.C_2 \Rightarrow t_2) \in \tenv}
+        {\tenv, (C_1 \Rightarrow t_1), x \trl (C_1 \wedge C_2 \wedge t_1=t_2 \gd t_2)}
+\eda
+\bda{cc}
+ \ba{cc}
+   \tlabel{Abs} &
+   \myirule{\mbox{$a$,$b$ fresh} \sgap 
+        \tenv\cup\{x:a\},(C_1\wedge t_1=a\arrow b \Rightarrow b), e \trl (F \gd t)}
+      {\tenv, (C_1 \Rightarrow t_1), \lambda x.e \trl (F \gd t_1)}
+ \ea
+ &
+ \ba{cc}
+   \tlabel{App} &
+   \myirule{\mbox{$a$,$b$ fresh} \sgap C_4\equiv C_3\wedge a=b\arrow t_3 
+       \\ \tenv, (C_4 \Rightarrow a), e_1 \trl (F_1 \gd t_1) 
+       \\   \tenv, (C_4 \Rightarrow b), e_2 \trl (F_2 \gd t_2)}
+     {\tenv, (C_3 \Rightarrow t_3), e_1~e_2 \trl (F_1 \wedge F_2 \gd t_3)}
+ \ea
+\eda
+\bda{cc}
+ \ba{cc}
+   \tlabel{Case} &
+   \myirule{\mbox{$a$,$b$ fresh} \sgap \tenv, (C\Rightarrow a), e \trl (F_e \gd t_e)
+       \\ \tenv, (C \wedge b=a\arrow t \Rightarrow b), p_i\arrow e_i \trl (F_i \gd t_i)
+          \sgap \mbox{for $i\in I$}
+       \\ F\equiv F_e \wedge \bigwedge_{i\in I} F_i}
+        {\tenv, (C\Rightarrow t), \CASE\ e~ \OF\ [p_i \arrow  e_i]_{i\in I} \trl (F \gd t)}
+ \ea
+  &
+ \ba{cc}
+  \tlabel{Pat} &
+  \myirule{\mbox{$a$,$b$ fresh} \sgap p \turns \forall \bar{c}.(D \gd \tenv_p \gd t_p)
+         \\ \tenv \cup \tenv_p, (C \wedge t=a \arrow b \Rightarrow b), e \trl (F_e \gd t_e)
+         \\ F \equiv \forall \bar{c}.(D \implies \bar{\exists}_{\tv(\tenv,\bar{c},t_e)}.F_e)
+             \wedge t=t_p \arrow t_e}
+      {\tenv, (C \Rightarrow t), p \arrow e \trl (F \gd t)}
+ \ea
+\eda
+\bda{cc}
+ \tlabel{Let} &
+ \myirule{\mbox{$a$ fresh} \sgap \tenv,(C \Rightarrow a), e_1 \trl (F_1 \gd t_1)
+       \\ C_1=\solve(F_1 \gd P) \sgap 
+           \bar{a} = \tv(C_1,t_1) - \tv(\tenv) 
+       \\ \tenv \cup \{ g:\forall \bar{a}. C_1 \Rightarrow t_1 \}, 
+           (C \Rightarrow t), e_2 \trl (F_2 \gd t_2)}
+    {\tenv, (C \Rightarrow t), \LET\ g=e_1 ~\IN\ e_2  \trl (F_2 \gd t_2)}
+\eda
+\bda{cc}
+ \tlabel{LetA} &
+ \myirule{\bar{a} = \tv(C_1,t_1) \sgap  
+        \tenv\cup \{ g : \forall \bar{a}. C_1 \Rightarrow t_1 \},
+          (C\wedge C_1 \Rightarrow t_1), e_1 \trl (F_1 \gd t'_1)
+      \\  \tenv \cup \{ g:\forall \bar{a}. C_1 \Rightarrow t_1 \}, 
+           (C \Rightarrow t), e_2 \trl (F_2 \gd t_2)
+      \\ F \equiv F_2 \wedge \forall\bar{a}.(C_1 \implies 
+                 \bar{\exists}_{\tv(\tenv,t'_1)}.F_1\wedge t_1=t_1')}
+     {\tenv, (C \Rightarrow t), \LET\ 
+              \ba{l} g :: C_1 \Rightarrow t_1 \\ g =e_1
+                      \ea ~\IN\ e_2 \trl (F \gd t_2)}
+\eda
+\bda{cc}
+ \ba{cc}
+   \tlabel{Pat-Var} &
+   \myirule{\mbox{$t$ fresh}}
+         {x \turns (True \gd \{x:t\} \gd t)}
+\ea
+&
+\ba{cc}
+ \tlabel{Pat-K} &
+ \myirule{K:\forall\bar{a},\bar{b}.D \Rightarrow t_1 \arrow ... \arrow t_l \arrow T~\bar{a} \sgap
+          \bar{b} \cap \bar{a} = \emptyset \\          
+          p_k \turns \forall \bar{b_k'}.(D_k' \gd \tenv_{p_k} \gd t_{p_k})  \sgap
+          \mbox{$\phi$ m.g.u.~of $t_{p_k}=t_k$} \sgap \mbox{for $k=1,...,l$}
+             \sgap {\it dom}(\phi)\cap \bar{b} =\emptyset}
+         {K~p_1 ... p_l \turns \forall \bar{b_1'},...,\bar{b_l'} ,\bar{b}.
+                 (\phi(D'_1)\wedge ... \phi(D'_l)\wedge \phi(D) \gd 
+               \phi(\tenv_{p_1})\cup ... \cup \phi(\tenv_{p_l}) \gd T~\phi(\bar{a}))}
+\ea
+\eda
+}
+
+
+\bda{llcl}
+ \mbox{Constraints} & C & ::= & t=t \mid TC~\bar{t} \mid C \wedge C \\
+ \mbox{ImpConstraints} & F & ::= & C \mid \forall \bar{b}. (C \implies \exists\bar{a}.F) \mid F \wedge F 
+\eda
+
+\subsection{Inference Algorithm}
+
+
+The algorithm is formulated in terms of a deduction system
+which uses judgments of the form $\tenv, (C \Rightarrow t), e \trl (F \gd t')$
+where environment $\tenv$, constraint $C$, type $t$, expression $e$
+are input values and implication constraint $F$ and type $t'$ are output values.
+The rules are given in Figure~\ref{f:type-inference}.
+Component $(C\Rightarrow t)$ represents type information which is provided by
+the context. As an invariant we maintain that 
+for any valid derivation $\tenv, (C \Rightarrow t), e \trl (F \gd t')$
+we have that $F \implies C \wedge t=t'$.
+
+
+We write $\tenv, e \trl (F \gd t')$ as a short-hand for
+$\tenv, (True \Rightarrow a), e \trl (F \gd t')$ where $a$ is a fresh variable.
+
+
+For patterns we introduce an auxiliary
+judgment of the form $p \turns \forall \bar{b}.(D \gd \tenv \gd t)$ 
+to compute the set of ``existential'' 
+variables $\bar{b}$,
+constraint $D$, environment $\tenv$ and type $t$ arising out of pattern $p$. 
+
+We need the ``context'' information to obtain a ``stronger'' inference system.  
+
+\begin{example}
+Consider
+\begin{code}
+class Foo a b where foo :: a->b->Int
+instance Foo Int b
+f :: Int-> Int
+f x = let g' = -- (1)
+               (let g :: a->Bool   -- (2)
+                    g y = foo x y
+                in True)
+      in 1
+\end{code}
+%
+At location \tlabel{2}, (roughly) the implication constraint
+$forall a.Foo~t_x~a$ arises where $t_x$ is the type of {\tt x}.
+At location \tlabel{1}, we need to solve this constraint.
+Solving of $forall a.Foo~t_x~a$ is hard unless we take into account
+the type information provided by the context (i.e.~the type annotation).
+Therefore, in our inference algorithm we push in the constraint that variable {\tt x} has
+type {\tt Int}. Then, we can easily solve $forall a.Foo~t_x~a$ if we know
+that $t_x=Int$.
+\end{example}
+
+
+\section{Constraint-based Version}
+
+
+
+\end{document}

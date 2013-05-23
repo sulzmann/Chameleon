@@ -1,0 +1,82 @@
+ The desugaring phase
+-----------------------
+
+This document outlines some of the steps taken during the desugaring phase.
+Broadly, desugaring translates a program from the external to the internal 
+syntax.
+
+--------------------------------------------------------------------------------
+Desugaring declarations
+-------------------------
+
+Rule declarations:
+  o These simply remain as rule declarations in the internal language.
+
+Data declarations:
+  o These are transformed straightforwardly into internal data declarations.
+    All internal data constructors have a (possibly empty) associated context.
+
+Type synonym declarations:
+  o Synonyms are normalised and fully applied during desugaring. Type
+    substitution is performed purely syntactically. The internal language
+    makes no mention of type synonyms.
+
+Type annotation declarations:
+  o Annotations are grouped with the let-bound variable they refer to, and end
+    up as part of a let binding in the internal language.
+    
+    e.g. f :: a -> a
+	 ...
+	 f x = x
+    becomes: f = let f' :: a -> a = \y -> case y of x -> x
+
+External declarations:
+  o Not sure what to do here. These should *not* be given a default
+    implementation (e.g. `undefined'), since they already correspond to 
+    externally defined values which have imlpementations.
+    We probably should remove `extern's from the external language.
+
+Function/Value declarations:
+  o All arguments are pushed into lambdas, and case is used for pattern
+    matching purposes. Where declarations are moved into a let expression
+    which comes into scope after the formal parameters, but before the body of
+    the declaration (the right-hand side.)
+    
+    e.g. f p_1 ... p_n = <rhs> where <decs>
+    becomes: f = \x_1 -> ... \x_n -> 
+		    case (x_1,...,x_n) of
+			(p_1, ..., p_n) -> let <decs> in  <rhs>
+
+Pattern declarations:
+  o We unpack and transform these into function bindings and translate as above.
+    Note that since pattern annotations are not allowed, each variable bound
+    by the pattern may require its own separate annotation.
+    
+    e.g. (a,b) = <exp>
+    becomes: a = (\(x,_) -> x) <exp>
+		b = (\(_,x) -> x) <exp>
+
+Overload declarations:
+  o Each singly-overloaded method is assigned its own class, with a single
+    member. Each overload declaration then becomes an instance declaration of
+    this class.
+    
+    e.g. overload f :: Int -> Int -> Int
+	    where f = primIntAdd
+
+    becomes: class F a where
+		f :: a
+	     instance F (Int -> Int -> Int) where
+		f = primIntAdd
+
+Class declarations:
+  o Class declarations are translated directly.
+
+Instance declarations:
+  o Instance functions are translated as per the value declaration above,
+    otherwise they remain virtually untouched.
+
+Interface declarations:
+  o I think we need a better module system before settling on these. Interface
+    declarations also depend on externs to be useful, and I want to eliminate
+    externs.

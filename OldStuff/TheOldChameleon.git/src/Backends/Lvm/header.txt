@@ -1,0 +1,35 @@
+/***---------------------------------------------------------------------
+  Modified and adapted for the Lazy Virtual Machine by Daan Leijen.
+  Modifications copyright 2001, Daan Leijen. This (modified) file is
+  distributed under the terms of the GNU Library General Public License.
+---------------------------------------------------------------------***/
+
+/**----------------------------------------------------------------------
+  The Lazy Virtual Machine.
+
+  Daan Leijen.
+
+  Copyright 2001, Daan Leijen. This file is distributed under the terms
+  of the GNU Library General Public License. This file is based on the
+  original Objective Caml source copyrighted by INRIA Rocquencourt.
+----------------------------------------------------------------------**/
+
+/*-----------------------------------------------------------------------
+  The Lazy Virtual Machine.
+
+  Daan Leijen.
+
+  Copyright 2001, Daan Leijen. All rights reserved. This file is
+  distributed under the terms of the GNU Library General Public License.
+-----------------------------------------------------------------------*/
+
+{-*-----------------------------------------------------------------------
+  The Core Assembler.
+
+  Copyright 2001, Daan Leijen. All rights reserved. This file
+  is distributed under the terms of the GHC license. For more
+  information, see the file "license.txt", which is included in
+  the distribution.
+-----------------------------------------------------------------------*-}
+
+-- $Id$

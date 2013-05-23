@@ -1,0 +1,148 @@
+================================================================================
+The structure and design of the new Chameleon system
+================================================================================
+
+Chameleon is a compiler framework, consisting of:
+
+  o Parser
+  o Syntactic program checks
+  o Justified constraint/CHR generation 
+  o Constraint solving (Herbrand, CHR, implications)
+  o Type checking
+  o Interactive system
+  o Evidence translation
+  o Backend
+
+Each component of Chameleon is completely modular, with a well-defined 
+interface. Components can be replaced to produce a compiler for a different
+language. (e.g. XHaskell)
+
+================================================================================
+
+--------------------------------------------------------------------------------
+ Parser
+----------
+
+Input: 
+  o String representing the source program
+
+Output:
+  o An External AST
+  o The source program string
+
+Description:
+  o Converts an input source text file into an external AST, maintaining
+    references into the source.
+
+
+--------------------------------------------------------------------------------
+ Desugarer
+-------------
+
+Input:
+  o An External AST
+ 
+Output:
+  o An Internal AST
+  o The source program string
+ 
+Description:
+  o Converts an external AST into an internal AST. The transformation is
+    location/node info. preserving. i.e. a node n_i in the internal AST, 
+    generated from node n_e, in the external AST, contains the same node
+    information as n_e.
+
+  o Transformations include:
+    - converting pattern matching/if-then-else into case expressions
+    - merging multiple clauses into single definitions
+    - rebalancing the AST to enforce operator precedence/associativity
+
+
+--------------------------------------------------------------------------------
+ Syntactic Ananlysis
+-----------------------
+
+Input:
+  o An Internal AST
+
+Output:
+  o A dependency graph (amongst let-bound variables)
+  o Confirmation that the program passes these checks
+
+Description:
+  o This module performs a number of simple syntactic checks on the
+    internalised program. It also produces a dependency graph which is
+    required by subsequent stages of the compiler.
+
+  o We check the following (errors):
+    - patterns are linear (no repeated variables)
+    - there are no multiply-defined variables (like the above, but for lets)
+    - all case matches match the same number of expressions (i.e. all clauses
+      have the same number of patterns.)
+    
+  o We could check (and warn of) the following conditions, but don't:
+    - variable aliasing
+    - inexhaustible patterns (not possible with guards)
+  
+--------------------------------------------------------------------------------
+ Constraint / CHR generation
+-------------------------------
+
+Input:
+  o An Internal AST
+
+Output:
+  o A set of justified CHR rules
+  o A goal (constraint) which gives the type of each let-bound variable 
+    (Currently this is implicit in the structure of the rules, i.e.
+     it's just the head of the rule which was generated from that declaration.
+     Maybe we should make it explicit, or at least make this dependency clear.)
+
+Description:
+  o 
+
+================================================================================
+Key data structures
+================================================================================
+
+SrcInfo:
+  o A structure containing information about a specific source location. These
+    allow us to associate values within the compiler (e.g. justifications,
+    ASTs) with explicity source locations. 
+    For each source location we need:
+    - a unique number
+    - a descriptive string (this should be abstracted so that any number of
+      strings/data types can be attached, as necessary)
+    - a reference to a source location (in the original text string); this
+      means: filename, row position, column position, and an offset into the 
+      source string
+
+External AST: 
+  o The abstract syntax tree reflecting the external language. This is the
+    rich source language that users write Chameleon programs in.
+  
+  o Each node in the tree is tagged with a SrcInfo structure.
+
+  o See external_AST.txt
+    
+InternalAST:
+  o The abstract syntax tree of the internal language. All internal processing
+    occurs in terms of this language.
+
+  o Ideally this should be the *smallest* language which can express all of
+    the external language.
+
+  o The internal language is a *core* subset of the external language. It
+    should not change much at all (if ever.) New language features should be
+    introduced via a modification to the external language along with a
+    translation into the internal language.
+
+  o Note that *all* internal processing occurs on the internal AST. Since each
+    node of the internal AST contains a reference to its originating external
+    location (a SrcInfo), errors which are found in terms of the internal 
+    language can be reported in terms of the external language.
+
+  o See internal_AST.txt
+
+Justification:
+  o A SrcInfo structure associated with a constraint.

@@ -1,0 +1,206 @@
+\documentclass{article}
+
+\usepackage{latexsym}
+\usepackage{amsmath}
+%\usepackage{code}
+
+\newcommand{\ba}{\begin{array}}
+\newcommand{\ea}{\end{array}}
+\newcommand{\bda}{\[\ba}
+\newcommand{\eda}{\ea\]}
+
+\newcommand{\simparrow}[0]{\Longleftrightarrow} 
+\newcommand{\proparrow}[0]{\Longrightarrow}
+\newcommand{\rightarrowtail}{\longrightarrow}
+
+\newtheorem{ex}{Example}
+\newenvironment{example}{
+        \begin{ex}\rm}%
+	{\hfill$\Box$\end{ex}}
+
+\newcommand{\Int}{\mbox{\it Int}}
+\newcommand{\Float}{\mbox{\it Float}}
+\newcommand{\Bool}{\mbox{\it Bool}}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+
+{\huge \bf The Chameleon CHR Solver}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Constraint Handling Rules with Justifications} \label{sec:chrs}
+
+CHRs manipulate a global set of primitive constraints, using rewrite rules of 
+two forms:
+
+\newcommand{\rulelabel}[1]{\mbox{({\it #1})}}
+
+\bda{rclcl}
+\mbox{simplification} & \rulelabel{r1} & 
+        c_1, \ldots, c_n & \simparrow & d_1, \ldots, d_m \\
+        
+{\mbox {propagation}} & \rulelabel{r2} &
+        c_1, \ldots, c_n & \proparrow & d_1, \ldots, d_m
+\eda
+
+
+where $c_1, \ldots, c_n$ are user-defined constraints, 
+$d_1, \ldots, d_m$ are constraints, and {\it r1} and {\it r2} are labels by
+which we can refer to these rules. We will often omit rule labels when they are
+not necessary.
+
+
+%The logical interpretation of the rules is as follows.
+%Let $\bar{x}$ be the variables occurring in $\{c_1, \ldots, c_n\}$,
+%and $\bar{y}$ be the other variables occurring in
+%the rule. 
+%The logical reading is
+%\begin{eqnarray*}
+%{\mbox {simplification}} &&
+%\forall \bar{x}  ((c_1 \wedge \cdots \wedge c_n)
+%        \leftrightarrow \exists \bar{y}~ (d_1 \wedge \cdots \wedge d_m)) \\
+%{\mbox {propagation}} &&
+%\forall \bar{x} ((c_1 \wedge \cdots \wedge c_n) 
+%        \implies \exists \bar{y}~(d_1 \wedge \cdots \wedge d_m)) 
+%\end{eqnarray*}
+
+In our use of the rules, constraints occurring on the right hand
+side of rules have justifications attached.
+We extend the usual derivation steps of Constraint Handling Rules
+to maintain and extend these justifications.
+In any particular derivation we employ one of two different justification 
+policies, which we refer to as the \emph{full} and \emph{partial} justification
+schemes.
+Under the \emph{full} scheme we keep track of enough information, within
+the justifications, to describe type errors.
+This can be costly when the additional information is not required, so for 
+normal constraint solving, i.e. when not explaining an error, we make use
+of the \emph{partial} justification scheme, which records only enough
+information for us to perform evidence construction.
+\footnote{ The information recorded by the \emph{partial} scheme is always a
+subset of that captured by the \emph{full} scheme. }
+
+In addition, some user constraints may be marked with a $\ominus$ sign. 
+Like justifications, these too must be propagated to new constraints.
+We encode these negative marks via the justification system, 
+by treating $\ominus$ as a special program location.
+
+While solving we we need to maintain a global state consisting of the
+constraint store, and a user constraint history.
+The store contains all user constraints and equations to which rules may yet
+be applied.
+The history contains all user constraints on 
+
+\subsection{CHR operations}
+
+The operational semantics of CHRs exhaustively apply rules to the
+global set of constraints, being careful not to apply propagation rules twice 
+on the same constraints (to avoid infinite propagation).  
+Possible derivation steps are defined as follows.
+Note that we employ non-deterministic rules selection during a derivation,
+but always perform any possible cycle-breaking steps in preference to firing a
+rule.
+
+
+A \emph{cycle-breaking step} for a store $C$ and history $H$ is defined as 
+follows. We denote the new store which results from this step as $C'$. The
+history remains unchanged.
+Let $f(t,l,v)_{J} \in H$ and $f(t',l',v')_{J'}\in C$, where $f$ represents the 
+type of function $f$. 
+If $\ominus \in J$ then $C' = C - f(t',l',v')_{J'}$.
+If $J$ is a prefix of $J'$ then $C' = C - f(t',l',v')_{J'})$,
+unless $f$ is a recursive, unannotated function, in which case
+$C' = (C - f(t',l',v')_{J'}) \wedge t = t'$.
+
+
+A \emph{simplification derivation step} 
+applying a renamed rule instance 
+$r \equiv c_1, \ldots, c_n \simparrow d_1, \ldots, d_m$ 
+to a set of constraints $C$ is defined as follows.
+Let $E \subseteq C_e$ be such that the most general unifier of
+$E$ is $\theta$. 
+Let $D = \{c'_1, \ldots, c'_n\} \subseteq C_u$,
+and suppose there exists substitution $\sigma$ on variables in $r$
+such that $\{\theta(c'_1), \ldots, \theta(c'_n)\} = 
+\{\sigma(c_1), \ldots, \sigma(c_n)\}$, 
+i.e. 
+a subset of $C_u$ \emph{matches} the left hand side of $r$ under the
+substitution given by $E$. 
+The \emph{justification} $J$ of the matching depends on which justification
+scheme we employ, and is defined as follows:
+\begin{description}
+\item [partial] The union of the justifications of $D$
+\item [full] The union of the justifications of $E' \cup D$, where $E'$ is a
+	     minimal subset of $E$ which also satisfies the rule matching
+	     condition above. We require that $E'$ is minimal in the sense
+	     that no strict subset of $E'$ can satisfy this condition.
+\footnote{It may also be that there are multiple minimal subsets of constraints 
+          which imply the rule match. In practice we simply pick the first such
+          subset that we find, ignoring the others.}
+
+\end{description}
+
+Then, we add $D$ to the history and create a new set of constraints
+$C' = C - D \cup \{ \theta(c'_1) = c_1, \ldots, \theta(c'_n) =
+c_n, (d_1)_{+J}, \ldots, (d_n)_{+J}\}$.
+Note that the equation $\theta (c'_i) = c_i$ is shorthand for
+$\theta (s_1) = t_1, \ldots, \theta (s_m) = t_m$ where $c'_i \equiv p(s_1, \ldots, s_m)_{J'}$
+and $c_i \equiv p(t_1, \ldots, t_m)$.
+
+The annotation $+J$ indicates that we add the justification set
+$J$ to the {\em beginning} of the original justification of each $d_i$.
+The other constraints  
+(the equality constraints arising from the match)
+are given empty justifications. 
+Indeed, this is sufficient.
+The connection to the original
+location in the program text is retained by 
+propagating justifications to constraints
+on the rhs only.
+
+A \emph{propagation derivation step} 
+applying a renamed rule instance 
+$r \equiv c_1, \ldots, c_n \proparrow d_1, \ldots, d_m$ 
+is defined similarly except the resulting set of constraints is
+$C' = C \cup \{ \theta(c'_1) = c_1, \ldots, \theta(c'_n) =
+c_n, (d_1)_{+J}, \ldots, (d_n)_{+J}\}$.
+The same rules for determining $J$ according to the justification policy 
+apply here.
+ 
+A derivation step from global set of constraints $C$ to $C'$
+using an instance of rule $r$ is denoted $C \rightarrowtail_r C'$.
+A \emph{derivation}, denoted $C \rightarrowtail_P^* C'$
+is a sequence of derivation steps using rules in $P$ where
+no derivation step is applicable to $C'$.
+
+\begin{example}
+Let $P$ be the following set of rules.
+\bda{llcl}
+\rulelabel{f} & F~a  & \simparrow & (G~a)_1 \\
+\rulelabel{g} & G~b  & \proparrow & (b = \Int)_2 \\
+\rulelabel{h} & h(c) & \simparrow & (F~d)_3, (c = d)_4, (d = \Float)_5
+\eda
+
+We being with the goal $h(t)_6$, and perform the following derivation.
+The constraints responsible for causing a rule to fire are underlined.
+Note that we do not bother renaming any of the variables, since they are all
+distinct and no rule is applied more than once.
+\bda{rcl}
+h(t)_6 & \rightarrowtail_h & t = c, \underline{(F~d)_{[6,3]}}, 
+                             (c = d)_{[6,4]}, (d = \Float)_{[6,5]} \\
+       & \rightarrowtail_f & t = c, d = a, \underline{(G~a)_{[6,3,1]}}, 
+                             (c = d)_{[6,4]}, (d = \Float)_{[6,5]} \\
+       & \rightarrowtail_g & t = c, d = a, a = b, (b = \Int)_{[6,3,1,2},
+                             (c = d)_{[6,4]}, (d = \Float)_{[6,5]}
+\eda
+
+\end{example}
+
+
+
+
+
+\end{document}

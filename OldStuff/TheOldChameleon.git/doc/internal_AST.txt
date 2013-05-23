@@ -1,0 +1,91 @@
+ Chameleon's internal language / AST
+--------------------------------------
+(see notes below)
+
+prog := <decl>*
+    
+decl := import <cons_id>
+     |  fun <var_id> = <expr>
+     |  data <type> <cons>*
+     |  rule <rule>
+     |  overload <var_id> :: <tschm> = <expr>
+     |  extern <var_id> :: <tschm>
+
+rule := <ucons> <==> <cnstrnt>
+     |  <ucons>  ==> <cnstrnt>
+
+cons := <ctxt> => <cons_id> <type>*
+
+expr := <expr> <expr>
+     |  case <expr>* of match*
+     |  \ <var_id> -> <expr>
+     |  let <let_bnd>* in <expr>
+     |  <lit>
+
+lit  := <int>
+     |  <float>
+     |  '<char>'
+     |  "<string>"
+
+let_bnd := <var_id> = <expr>
+	|  <var_id> ::  <tschm> = <expr>
+	|  <var_id> ::: <tschm> = <expr>
+
+match := <pat>* -> <expr>
+
+pat := <var_id>
+    |  <cons_id> <pat>*
+
+tschm:= <ctxt> => <type>
+     |  <type>
+
+type := <var_id>
+     |  <cons_id>
+     |  <type> <type>
+
+ctxt := <cnstrnt>*
+
+cnstrnt := <eq>
+	|  <ucons>
+
+eq    := <type> = <type>
+
+ucons := <cons_id> <type>+
+
+
+--------------------------------------------------------------------------------
+
+NOTES:
+  o In the internal language there need be no syntactic distinction amongst
+    different types of ids. (e.g. var_id and cons_id can both include upper
+    and lower case strings -- we can distinguish pattern constructors from
+    pattern variables by the AST term, we don't need to look at the id)
+
+  o Case expressions allow matching over any number of expressions
+    simultaneously. (This is the same as grouping all the expressions into a 
+    tuple and matching on the tuple.)
+
+    Keeping all patterns together makes checking for linearity much simpler.
+    (Otherwise adjacent patterns in the internal AST get spread over 
+    multiple, nested case expressions in the external AST.)
+
+    By allowing multiple (possibly zero) simultaneous matches, we allow the
+    desugarer to blindly produce some degenerate programs, which we then check 
+    for and eliminate during syntactic analysis. 
+    (Where all the other related checks are grouped anyway.)
+
+  o All names in the internal language are distinct! They are all renamed
+    during desugaring. Each variable's SrcId will refer to that variables
+    original external name.
+
+  o As for tuples, we use a special, built-in arity-specific constructor to
+    represent lists which, in the external language, were represented using
+    the special list sugar (i.e. a bracketed, comma-separated sequence of
+    elements; as opposed to a list built out of explicit cons applications.)
+    For a list with n elements, there is a constructor 
+    []_n :: a_1 -> ... -> a_n -> [a]   (where all `a's are the same)
+    NOTE: currently we only support a fixed subset of all possible static
+    lists (i.e. those up to length 7), in general we should just generate
+    whichever lengths are actually required by the program.
+
+  o Type synonym expansion occurs during the desugaring phase!

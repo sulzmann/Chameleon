@@ -1,0 +1,697 @@
+#!/bin/sh
+
+#------------------------------------------------------------------------
+#  The Lazy Virtual Machine.
+#
+#  Daan Leijen.
+#
+#  Copyright 2001, Daan Leijen. This file is distributed under the terms
+#  of the GNU Library General Public License. This file is based on the
+#  original Objective Caml source copyrighted by INRIA Rocquencourt.
+#------------------------------------------------------------------------
+
+#########################################################################
+#                                                                       #
+#                            Objective Caml                             #
+#                                                                       #
+#            Xavier Leroy, projet Cristal, INRIA Rocquencourt           #
+#                                                                       #
+#   Copyright 1999 Institut National de Recherche en Informatique et    #
+#   en Automatique.  All rights reserved.  This file is distributed     #
+#   under the terms of the GNU Library General Public License.          #
+#                                                                       #
+#########################################################################
+
+# $Id$
+
+configure_options=$*
+prefix=/usr/local
+bindir=''
+host_type=unknown
+cc=gcc
+ccoption=''
+mathlib='-lm'
+posix_threads=no
+verbose=no
+
+gcc_warnings="-Wall"
+
+# Parse command-line arguments
+
+while : ; do
+  case "$1" in
+    "") break;;
+    -prefix|--prefix)
+        prefix=$2; shift;;
+    -bindir|--bindir)
+        bindir=$2; shift;;
+    -host*|--host*)
+        host_type=$2; shift;;
+    -cc*)
+        ccoption="$2"; shift;;
+    -with-pthread*|--with-pthread*)
+        posix_threads=yes;;
+    -verbose|--verbose)
+        verbose=yes;;
+    *) echo "Unknown option \"$1\"." 1>&2; exit 2;;
+  esac
+  shift
+done
+
+# Sanity checks
+
+case "$prefix" in
+  /*) ;;
+   *) echo "The -prefix directory must be absolute." 1>&2; exit 2;;
+esac
+case "$bindir" in
+  /*) ;;
+  "") ;;
+   *) echo "The -bindir directory must be absolute." 1>&2; exit 2;;
+esac
+
+# Generate the files
+
+cd config/tests
+rm -f s.h m.h makefile
+touch s.h m.h makefile
+
+
+# Determine the system type
+echo
+echo "** check system **"
+
+if test "$host_type" = "unknown"; then
+  if host_type=`./config.guess`; then :; else
+    echo "Cannot guess host type"
+    echo "You must specify one with the -host option"
+    echo "For example: -host i386-pc-windows"
+    exit 2
+  fi
+fi
+if host=`./config.sub $host_type`; then :; else
+  echo "Please specify the correct host type with the -host option"
+  exit 2
+fi
+echo "Configuring for a $host ..."
+
+case $host in
+  *-*-cygwin*) cat <<'EOF'
+
+WARNING: You have selected a cygwin host. The LVM will
+depend on the cygwin library with this configuration.
+To remove the dependency, use:
+
+> ./configure -host i386-pc-windows
+
+This configuration uses the mingw32 compiler, which is
+normally installed together with the cygwin environment.
+This removes the dependency on the cygwin library.
+
+Press <enter> to proceed or <interrupt> to stop.
+EOF
+       read reply;;
+esac
+
+
+# Do we have gcc?
+
+if test -z "$ccoption"; then
+  if sh ./searchpath gcc; then
+    echo "gcc found"
+    cc=gcc
+  else
+    cc=cc
+  fi
+else
+  cc="$ccoption"
+fi
+
+if test "$cc" = "cl"; then
+cat<<'EOF'
+
+WARNING: You have selected the Microsoft Visual C++ compiler.
+With the GNU C-compiler, the LVM uses extensions to implement
+threaded code and real global registers. On the other hand,
+the Visual C++ compiler generates better code in general.
+You can use the GNU C-compiler if you install the cygwin
+package which is available from:
+
+> http://www.cygwin.org
+
+You should configure from the bash shell with:
+
+> ./configure -host i386-pc-windows
+
+Press <enter> to proceed or <interrupt> to stop.
+EOF
+read reply
+fi
+
+# The linker
+
+link=$cc
+
+# Strip
+
+if sh ./searchpath strip; then
+  echo "strip found"
+  strip=strip
+else
+  strip=echo
+fi
+
+# Check for buggy versions of GCC
+
+case "$host,$cc" in
+  i[3456]86-*-*,gcc*)
+    case `$cc --version` in
+      2.7.2.1) cat <<'EOF'
+
+WARNING: you are using gcc version 2.7.2.1 on an Intel x86 processor.
+This version of gcc is known to generate incorrect code for the
+LVM runtime system on some Intel x86 machines.
+In particular, the version of gcc 2.7.2.1 that comes with
+Linux RedHat 4.x / Intel is affected by this problem.
+Other Linux distributions might also be affected.
+If you are using one of these configurations, you are strongly advised
+to use another version of gcc, such as 2.7.2.3 or 2.95, which are
+known to work well with the LVM runtime system.
+
+Press <enter> to proceed or <interrupt> to stop.
+EOF
+        read reply;;
+    esac;;
+esac
+
+# Configure the c compiler for the runtime system
+
+cccompopts=""
+cclinkopts=""
+ostype="unix"
+exe=""
+dll=".so"
+config="$cc-$host"
+
+case "$cc,$host" in
+  cc,*-*-nextstep*)
+    # GNU C extensions disabled, but __GNUC__ still defined!
+    cccompopts="-fno-defer-pop $gcc_warnings -U__GNUC__ -posix"
+    cclinkopts="-posix";;
+  cc,*-*-macosx*)
+    cccompopts="-fno-defer-pop $gcc_warnings -DSHRINKED_GNUC"
+    mathlib="";;
+  *,*-*-rhapsody*)
+    # Almost the same as NeXTStep
+    cccompopts="-fno-defer-pop $gcc_warnings -DSHRINKED_GNUC"
+    mathlib="";;
+  *,*-*-beos*)
+    cccompopts="-fno-defer-pop $gcc_warnings"
+    # No -lm library
+    mathlib="";;
+  gcc,alpha-*-osf*)
+    cccompopts="-fno-defer-pop $gcc_warnings"
+    if cc="$cc" sh ./hasgot -mieee; then
+      cccompopts="-mieee $cccompopts";
+    fi
+    # Put code and static data in lower 4GB
+    cclinkopts="-Wl,-T,12000000 -Wl,-D,14000000"
+    # Tell gcc that we can use 32-bit code addresses for threaded code
+    echo "#define ARCH_CODE32" >> m.h;;
+  cc,alpha-*-osf*)
+    cccompopts="-std1 -ieee";;
+  cc,mips-*-irix6*)
+    # Add -n32 flag to ensure compatibility with native-code compiler
+    cccompopts="-n32"
+    # Turn off warning "unused library"
+    cclinkopts="-n32 -Wl,-woff,84";;
+  cc*,mips-*-irix6*)
+    # (For those who want to force "cc -64")
+    # Turn off warning "unused library"
+    cclinkopts="-Wl,-woff,84";;
+  *,alpha-*-unicos*)
+    # For the Cray T3E
+    cccompopts="-DUMK";;
+  gcc*,powerpc-*-aix4.3*)
+    # Avoid name-space pollution by requiring Unix98-conformant includes
+    cccompopts="-fno-defer-pop $gcc_warnings -D_XOPEN_SOURCE=500";;
+  *,powerpc-*-aix4.3*)
+    cccompopts="-D_XOPEN_SOURCE=500";;
+  gcc*,*-*-macosx*)
+    cccompopts="$gcc_warnings";;
+  gcc*,*-*-cygwin*)
+    cccompopts="$gcc_warnings"
+    exe=".exe"
+    dll=".dll"
+    ostype="cygwin"
+    mathlib="";;
+  gcc*,*-*-mingw*|gcc*,*-*-windows*)
+    cccompopts="-mno-cygwin $gcc_warnings"
+    cclinkopts="-mno-cygwin"
+    exe=".exe"
+    dll=".dll"
+    ostype="windows"
+    mathlib="";;
+  gcc*)
+    cccompopts="-fno-defer-pop $gcc_warnings";;
+  cl*,*-*-windows*)
+    cclinkopts="-nologo"
+    cccompopts="-nologo -W3"
+    exe=".exe"
+    dll=".dll"
+    ostype="windows"
+    mathlib="";;
+esac
+
+# Configure compiler to use in further tests
+
+ccomp=$cc
+cc="$cc $cclinkopts"
+export cc cclibs verbose
+cclinkopts="$cclinkopts $mathlib"
+
+# Check C compiler
+
+sh ./runtest ansi.c
+case $? in
+  0) echo "The C compiler is ANSI-compliant.";;
+  1) echo "The C compiler $cc is not ANSI-compliant."
+     echo "You need an ANSI C compiler to build the LVM system."
+     exit 2;;
+  *) echo "Unable to compile the test program."
+     echo "Make sure the C compiler $cc is properly installed."
+     exit 2;;
+esac
+
+# write the host to m.h and s.h
+echo "/* machine architecture settings \"$config\" */" >> m.h
+echo "/* operating system settings \"$config\" */" >> s.h
+
+
+# Write options to makefile
+
+echo "# generated by ./configure $configure_options" >> makefile
+echo "# system settings \"$config\" */" >> makefile
+
+# Where to install
+
+echo "PREFIX=$prefix" >> makefile
+case "$bindir" in
+  "") echo 'BINDIR=$(PREFIX)/bin' >> makefile
+      bindir="$prefix/bin";;
+   *) echo "BINDIR=$bindir" >> Makefile;;
+esac
+
+# write compiler/host information to m.h
+# ARCH_IA32 is needed for floating point code
+echo "#define ARCH_COMP	$ccomp" >> m.h
+echo "#define ARCH_HOST \"$host\"" >> m.h
+case "$host" in
+  i[3456789]86-*-*) echo "#define ARCH_IA32" >> m.h;;
+esac
+
+# Check the sizes of data types
+echo "Checking the sizes of integers and pointers..."
+sh ./runtest sizeint.c
+size_int=$?
+sh ./runtest sizelong.c
+size_long=$?
+sh ./runtest sizelongp.c
+size_longp=$?
+sh ./runtest sizeshort.c
+size_short=$?
+
+case "$size_long,$size_longp" in
+  4,4) echo "Ok, this is a regular 32 bit architecture."
+       echo "#define ARCH32" >> m.h
+       arch_bits="32 bit";;
+  8,8) echo "Wow! A 64 bit architecture!"
+       echo "#define ARCH64" >> m.h
+       arch_bits="64 bit";;
+  *,8) echo "Wow! A 64 bit architecture!"
+       echo "Unfortunately, the LVM system cannot work in the case"
+       echo "sizeof(long) != sizeof(long *)."
+       echo "The LVM system won't run on this architecture."
+       exit 2;;
+  *,*) echo "This architecture seems to be neither 32 bits nor 64 bits."
+       echo "The LVM system won't run on this architecture."
+       exit 2;;
+    *) echo "Unable to compile the test program."
+       echo "Make sure the C compiler $cc is properly installed."
+       exit 2;;
+esac
+if test $size_int != 4 && test $size_long != 4 && test $size_short != 4; then
+  echo "Sorry, we can't find a 32-bit integer type"
+  echo "(sizeof(short) = $size_short, sizeof(int) = $size_int, sizeof(long) = $size_long)"
+  echo "The LVM system won't run on this architecture."
+  exit 2
+fi
+
+echo "#define SIZEOF_INT $size_int" >> m.h
+echo "#define SIZEOF_LONG $size_long" >> m.h
+echo "#define SIZEOF_SHORT $size_short" >> m.h
+
+if test $size_long = 8; then
+     echo "#define ARCH_INT64 long" >> m.h
+     echo "#define ARCH_UINT64 unsigned long" >> m.h
+     echo "#define ARCH_INT64_SUFFIX L"   >> m.h
+     echo '#define ARCH_INT64_FORMAT "l"' >> m.h
+     int64_supported=true
+else
+  sh ./runtest longlong.c
+  case $? in
+  0) echo "64-bit \"long long\" integer type found (printf is not supported)."
+     echo "#define ARCH_INT64 long long" >> m.h
+     echo "#define ARCH_UINT64 unsigned long long" >> m.h
+     echo "#define ARCH_INT64_SUFFIX LL"   >> m.h
+     echo '#undef ARCH_INT64_FORMAT' >> m.h
+     int64_supported=true;;
+  1) echo "64-bit \"long long\" integer type found (printf with ll)."
+     echo "#define ARCH_INT64 long long" >> m.h
+     echo "#define ARCH_UINT64 unsigned long long" >> m.h
+     echo "#define ARCH_INT64_SUFFIX LL"   >> m.h
+     echo '#define ARCH_INT64_FORMAT "ll"' >> m.h
+     int64_supported=true;;
+  2) echo "64-bit \"long long\" integer type found (printf with q)."
+     echo "#define ARCH_INT64 long long" >> m.h
+     echo "#define ARCH_UINT64 unsigned long long" >> m.h
+     echo "#define ARCH_INT64_SUFFIX LL"  >> m.h
+     echo '#define ARCH_INT64_FORMAT "q"' >> m.h
+     int64_supported=true;;
+  *) sh ./runtest int64.c
+     case $? in
+     0) echo "64-bit \"__int64\" integer type found (printf is not supported)."
+        echo "#define ARCH_INT64 __int64" >> m.h
+        echo "#define ARCH_UINT64 unsigned __int64" >> m.h
+        echo "#define ARCH_INT64_SUFFIX I64"   >> m.h
+        echo '#undef ARCH_INT64_FORMAT' >> m.h
+        int64_supported=true;;
+     1) echo "64-bit \"__int64\" integer type found (printf with I64)."
+        echo "#define ARCH_INT64 __int64" >> m.h
+        echo "#define ARCH_UINT64 unsigned __int64" >> m.h
+        echo "#define ARCH_INT64_SUFFIX I64"   >> m.h
+        echo '#define ARCH_INT64_FORMAT "I64"' >> m.h
+        int64_supported=true;;
+     *) echo "No suitable 64-bit integer type found."
+        echo "#undef ARCH_INT64" >> m.h
+        int64_supported=false;;
+     esac;;
+  esac
+fi
+
+
+# Determine endianness
+
+sh ./runtest endian.c
+case $? in
+  0) echo "This is a big-endian architecture."
+     echo "#define ARCH_BIG_ENDIAN" >> m.h
+     arch_endian="big endian";;
+  1) echo "This is a little-endian architecture."
+     echo "#undef ARCH_BIG_ENDIAN" >> m.h
+     arch_endian="little endian";;
+  2) echo "This architecture seems to be neither big endian nor little endian."
+     echo "The LVM system won't run on this architecture."
+     exit 2;;
+  *) echo "Something went wrong during endianness determination."
+     echo "You'll have to figure out endianness yourself"
+     echo "(option ARCH_BIG_ENDIAN in m.h).";;
+esac
+
+# Determine alignment constraints
+
+sh ./runtest dblalign.c
+case $? in
+  0) echo "Doubles can be word-aligned."
+     echo "#undef ARCH_ALIGN_DOUBLE" >> m.h;;
+  1) echo "Doubles must be doubleword-aligned."
+     echo "#define ARCH_ALIGN_DOUBLE" >> m.h;;
+  *) echo "Something went wrong during alignment determination for doubles."
+     echo "I'm going to assume this architecture has alignment constraints over doubles."
+     echo "That's a safe bet: The LVM system will work even if"
+     echo "this architecture has actually no alignment constraints."
+     echo "#define ARCH_ALIGN_DOUBLE" >> m.h;;
+esac
+
+if $int64_supported; then
+  sh ./runtest int64align.c
+  case $? in
+    0) echo "64-bit integers can be word-aligned."
+       echo "#undef ARCH_ALIGN_INT64" >> m.h;;
+    1) echo "64-bit integers must be doubleword-aligned."
+       echo "#define ARCH_ALIGN_INT64" >> m.h;;
+    *) echo "Something went wrong during alignment determination for 64-bit integers."
+       echo "I'm going to assume this architecture has alignment constraints."
+       echo "That's a safe bet: The LVM system will work even if"
+       echo "this architecture has actually no alignment constraints."
+       echo "#define ARCH_ALIGN_INT64" >> m.h;;
+  esac
+fi
+
+# Write the OS type (unix, cygwin or windows)
+
+echo "#define OS_TYPE \"$ostype\"" >> s.h
+
+
+case "$ccomp,$ostype" in
+  gcc,windows) echo "#define OS_WINDOWS" >> s.h
+               echo "#define OS_MINGW"   >> s.h;;
+  *,windows)   echo "#define OS_WINDOWS" >> s.h;;
+  *,cygwin*)   echo "#define OS_UNIX"    >> s.h
+               echo "#define OS_CYGWIN"  >> s.h;;
+  *,*)         echo "#define OS_UNIX"    >> s.h;;
+esac
+
+echo "#define EXE \"$exe\""  >> s.h
+echo "#define DLL \"$dll\""  >> s.h
+
+# Check the semantics of signal handlers
+
+if sh ./hasgot sigaction sigprocmask; then
+  echo "POSIX signal handling found."
+  echo "#define POSIX_SIGNALS" >> s.h
+else
+  if sh ./runtest signals.c; then
+    echo "Signals have the BSD semantics."
+    echo "#define BSD_SIGNALS" >> s.h
+  else
+    echo "Signals have the System V semantics."
+  fi
+  if sh ./hasgot sigsetmask; then
+    echo "sigsetmask() found"
+    echo "#define HAS_SIGSETMASK" >> s.h
+  fi
+fi
+
+# calling conventions
+
+if sh ./runtest cdecl.c; then
+  echo "has keyword __cdecl."
+  echo "#define CCALL __cdecl" >> s.h
+else
+  echo "#define CCALL" >> s.h
+fi
+
+if sh ./runtest stdcall.c; then
+  echo "has keyword __stdcall."
+  echo "#define STDCALL __stdcall" >> s.h
+fi
+
+if sh ./runtest const.c; then
+  echo "has keyword const."
+else
+  echo "#define const" >> s.h
+fi
+
+if sh ./runtest bool.c; then
+  echo "has keyword bool, true and false."
+  echo "#define HAS_BOOL" >> s.h
+fi
+
+if sh ./runtest labels.c; then
+  echo "first class labels are supported."
+  echo "#define HAS_LABEL_VALUES" >> s.h
+fi
+
+# header files
+
+echo
+echo "** check header files **"
+
+if test "$ostype" = "windows"; then
+  echo "windows.h found"
+  echo "#define HAS_WINDOWS_H" >> s.h
+else
+ if sh ./hasgot -i dlfcn.h; then
+  echo "dlfcn.h found."
+  echo "#define HAS_DLFCN_H" >> s.h
+  if sh ./hasgot -ldl dlopen; then
+    echo "   link with -ldl"
+    cclinkopts="$cclinkopts -ldl"
+  fi
+ else if sh ./hasgot -i dl.h; then
+  echo "dl.h found."
+  echo "#define HAS_DL_H" >> s.h
+ else
+  echo "no dynamic linking available on this platform"
+ fi
+ fi
+
+
+ if sh ./hasgot -i pthread.h; then
+  echo "pthread.h found."
+  echo "#define HAS_PTHREAD_H" >> s.h
+  if sh ./hasgot pthread_mutex_init; then
+    echo "   link without -pthread"
+  else
+    echo "   link with -pthread"
+    cclinkopts="$cclinkopts -pthread"
+  fi
+ else
+  echo "no system threads available on this platform"
+ fi
+fi
+
+
+if sh ./hasgot -i stdarg.h; then
+  echo "stdarg.h found."
+  echo "#define HAS_STDARG_H" >> s.h
+fi
+
+if sh ./hasgot -i time.h; then
+  echo "time.h found."
+  echo "#define HAS_TIME_H" >> s.h
+fi
+
+if sh ./hasgot -i times.h; then
+  echo "times.h found."
+  echo "#define HAS_TIMES_H" >> s.h
+else
+  if sh ./hasgot -i sys/times.h; then
+    echo "sys/times.h found."
+    echo "#define HAS_SYS_TIMES_H" >> s.h
+  fi
+fi
+
+if sh ./hasgot -i io.h; then
+  echo "io.h found."
+  echo "#define HAS_IO_H" >> s.h
+fi
+
+if sh ./hasgot -i unistd.h; then
+  echo "unistd.h found."
+  echo "#define HAS_UNISTD_H" >> s.h
+fi
+
+if sh ./hasgot -i float.h; then
+  echo "float.h found."
+  echo "#define HAS_FLOAT_H" >> s.h
+fi
+
+if sh ./hasgot -i ieeefp.h; then
+  echo "ieeefp.h found."
+  echo "#define HAS_IEEEFP_H" >> s.h
+fi
+
+# functions
+
+echo
+echo "** check functions **"
+
+if sh ./hasgot strerror; then
+  echo "strerror() found."
+  echo "#define HAS_STRERROR" >> s.h
+fi
+
+if sh ./hasgot memmove; then
+  echo "memmove() found."
+  echo "#define HAS_MEMMOVE" >> s.h
+fi
+
+if sh ./hasgot vsnprintf; then
+  echo "vsnprintf() found."
+  echo "#define HAS_VSNPRINTF" >> s.h
+else if sh ./hasgot _vsnprintf; then
+  echo "_vsnprintf() found."
+  echo "#define HAS__VSNPRINTF" >> s.h
+ fi
+fi
+
+if sh ./hasgot snprintf; then
+  echo "snprintf() found."
+  echo "#define HAS_SNPRINTF" >> s.h
+else if sh ./hasgot _snprintf; then
+  echo "_snprintf() found."
+  echo "#define HAS__SNPRINTF" >> s.h
+ fi
+fi
+
+if sh ./hasgot strncpy; then
+  echo "strncpy() found."
+else
+  echo "#define strncpy(dest,src,size)  strcpy(dest,src)" >> s.h
+fi
+
+if sh ./hasgot stricmp; then
+  echo "stricmp() found."
+  echo "#define HAS_STRICMP" >> s.h
+fi
+
+if sh ./hasgot _controlfp; then
+  echo "_controlfp() found."
+  echo "#define HAS_CONTROLFP" >> s.h
+fi
+
+# Finish generated files
+
+echo "CC=$ccomp" >> makefile
+echo "LINK=$link" >> makefile
+echo "STRIP=$strip" >> makefile
+echo "LINKOPTS=$cclinkopts" >> makefile
+echo "EXE=$exe" >> makefile
+echo "DLL=$dll" >> makefile
+echo "CP=cp" >> makefile
+echo "CD=cd" >> makefile
+echo "RM=rm -f" >> makefile
+echo "MKDIR=mkdir -p" >> makefile
+
+case "$config" in
+  cl-i[3456789]86-pc-windows*)
+     echo "CONFIGPATH=../config/$config" >> makefile;;
+  *)
+     echo "CONFIGPATH=../config" >> makefile;;
+esac
+
+echo "CCOPTS=$cccompopts -I\$(CONFIGPATH)" >> makefile
+ 
+rm -f tst$exe hasgot.c *.obj
+
+rm -f ../m.h ../s.h ../Makefile
+cp m.h s.h makefile ..
+
+# copy Visual C++ configuration for people without cygwin
+if test "$ccomp" = "cl"; then
+ rm -f ../$config/m.h ../$config/s.h ../$config/Makefile
+ mkdir -p ../$config
+ cp m.h s.h makefile ../$config
+fi
+
+rm -f m.h s.h makefile
+
+# Print a summary
+
+echo
+echo "** Configuration summary **"
+echo
+echo "System:"
+echo "        descriptor................ $host"
+echo "        architecture.............. $arch_bits"
+echo "        endianness................ $arch_endian"
+echo
+echo "Configuration for the c compiler:"
+echo "        C compiler used........... $cc"
+echo "        options for compiling..... $cccompopts"
+echo "        linker used............... $link"
+echo "        options for linking....... $cclinkopts"
+echo
+echo

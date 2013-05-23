@@ -1,0 +1,20 @@
+
+
+eval.ch:
+
+  fails, why?
+
+lexical-poly-rec.ch:
+
+  succeeds, but type seems incorrect, 
+  should be g :: Eq b => [b] -> Bool
+
+  succeeds, even if we omit annotation (2)
+
+prefix.ch:
+
+ fine
+
+show.ch:
+
+ succeeds, though we didn't provide an annotation!?

@@ -1,0 +1,15 @@
+ Chameleon's external language / AST
+---------------------------------------
+(see notes below)
+
+
+--------------------------------------------------------------------------------
+
+NOTES:
+  o This is almost the same syntax as Haskell 98, except we support:
+    (features not in the original Chameleon are marked with an *)
+  
+    - rule declarations
+    - overload declarations
+    - extern declarations
+    - contexts for data constructor (GRDTs)

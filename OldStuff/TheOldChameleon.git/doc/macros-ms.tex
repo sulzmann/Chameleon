@@ -1,0 +1,167 @@
+
+% Martin's macros
+   
+
+% groups
+
+%%\newtheorem{lemma}{Lemma}
+\newtheorem{definition}{Definition}
+%%\newtheorem{theorem}{Theorem}
+\newtheorem{corollary}{Corollary}
+%%\newtheorem{remark}{Remark}
+\newtheorem{conjecture}{Conjecture}
+%%\newtheorem{example}{Example}
+
+% arrays
+
+\newcommand{\bi}{\begin{array}[t]{@{}l@{}}}
+\newcommand{\ei}{\end{array}}
+\newcommand{\ba}{\begin{array}}
+\newcommand{\ea}{\end{array}}
+\newcommand{\bda}{\[\ba}
+\newcommand{\eda}{\ea\]}
+\newcommand{\bp}{\begin{quote}\tt\begin{tabbing}}
+\newcommand{\ep}{\end{tabbing}\end{quote}}
+\newcommand{\set}[1]{\left\{
+    \begin{array}{l}#1
+    \end{array}
+  \right\}}
+\newcommand{\sset}[2]{\left\{~#1 \left|
+      \begin{array}{l}#2\end{array}
+    \right.     \right\}}
+
+
+% symbols
+
+\newcommand{\good}{good}
+ 
+\newcommand{\err}{{\bf W}}
+\newcommand{\VV}{{\cal V}} 
+\newcommand{\GT}{{\cal T}_G}
+\newcommand{\KK}{{\cal K}}
+\newcommand{\TT}{{\cal T}}
+\newcommand{\TC}{\mbox{\it TC}}
+\newcommand{\UL}{\mbox{UL}}
+\newcommand{\sUL}{\mbox{\scriptsize UL}}
+\newcommand{\true}{\mbox{\sf true}}
+\newcommand{\Int}{\mbox{\it Int}}
+\newcommand{\Bool}{\mbox{\it Bool}}
+\newcommand{\SF}{\mbox{$\cal S$}}
+\newcommand{\tauvec}{\bar{\tau}}
+\newcommand{\tvec}{\bar{t}}
+\newcommand{\kvec}{\bar{k}}
+\newcommand{\xvec}{\bar{x}}
+\newcommand{\muvec}{\bar{\mu}}
+\newcommand{\alphavec}{\bar{\alpha}}
+\newcommand{\betavec}{\bar{\beta}}
+\newcommand{\gammavec}{\bar{\gamma}}
+\newcommand{\thetavec}{\bar{\theta}}
+\newcommand{\deltavec}{\bar{\delta}}
+\newcommand{\bvec}{\bar{b}}
+\newcommand{\typo}{\Gamma}
+\newcommand{\tenv}{\Gamma}
+\newcommand{\typoinit}{\typo_0}
+\newcommand{\static}{S}
+\newcommand{\dynamic}{D}
+\newcommand{\sstatic}{{\scriptstyle S}}
+\newcommand{\sdynamic}{{\scriptstyle D}}
+\newcommand{\BTA}{\mbox{BTA}}
+\newcommand{\baseshape}{\bot}
+\newcommand{\TCT}{P}
+\newcommand{\Haskell}{H98}
+\newcommand{\TCTinit}{P_o}
+
+% figures, rules
+
+
+\newcommand{\tlabel}[1]{\mbox{(#1)}}
+\newcommand{\fig}[3]
+        {\begin{figure*}[t]#3\
+        \caption{\label{#1}#2}\ \hrulefill\ \end{figure*}}
+\newcommand{\figurebox}[1]
+        {\fbox{\begin{minipage}{\textwidth} #1 \end{minipage}}}
+\newcommand{\boxfig}[3]
+        {\begin{figure*}\figurebox{#3\caption{\label{#1}#2}}\end{figure*}}
+\newcommand{\myirule}[2]{{\renewcommand{\arraystretch}{1.2}\ba{c} #1
+                      \\ \hline #2 \ea}}
+
+% relations, operators
+
+\newcommand{\llist}[1]{\langle #1 \rangle}
+\newcommand{\sat}{\mbox{\it sat}}
+\newcommand{\entail}{\mbox{\it entail}}
+\newcommand{\unambig}{\mbox{\it unambig}}
+\newcommand{\complete}{\mbox{\it complete}}
+
+\newcommand{\projexclusion}[1]{\mbox{$\bar{\exists}#1$}}
+\newcommand{\funinst}{\mbox{\it inst}}
+%%\renewcommand{\inst}{\, \vdash^{\scriptstyle i} \,}
+%%\newcommand{\inst}{\, \vdash \,}
+\newcommand{\ileq}{\preceq}
+\newcommand{\ieq}{\simeq}
+\newcommand{\topannot}[1]{|#1|}
+\newcommand{\gendelta}{\mbox{\it gen}_{\delta}}
+\newcommand{\genbeta}{\mbox{\it gen}_{\beta}}
+\newcommand{\gen}{\mbox{\it gen}}
+\newcommand{\normalize}{\mbox{\it normalize}}
+\newcommand{\fail}{\mbox{\it fail}}
+\newcommand{\fixpt}{\mbox{${\cal F}$}}
+\newcommand{\testpa}{\mbox{${\cal T}$}}
+\newcommand{\addpa}{\mbox{${\cal A}$}}
+\newcommand{\matchpa}{\mbox{${\cal M}$}}
+\newcommand{\refmatchpa}{\mbox{${\cal R}$}}
+\newcommand{\wft}[1]{\mbox{\it wft}(#1)}
+\newcommand{\tv}{\mbox{\it fv}}
+\newcommand{\stv}{\mbox{\scriptsize fv}}
+\newcommand{\range}{\mbox{\it range}}
+\newcommand{\lub}{\wedge}
+\newcommand{\tyrel}[2]{(#1 \preceq #2)}
+\newcommand{\eqty}[2]{#1=#2}
+%%\newcommand{\ts}{\, \vdash \,}
+\newcommand{\turns}{\, \vdash \,}
+\newcommand{\tsinst}{\, \vdash^i \,}
+\newcommand{\tsttv}{\, \vdash^{ttv} \,}
+\newcommand{\tsUL}{\, \vdash_{\mbox{\scriptsize UL}} \,}
+\newcommand{\trc}{\, \vdash_{\scriptsize \id{inf}} \,}
+\newcommand{\trl}{\, \vdash_{\scriptsize \id{fml}} \,}
+\newcommand{\trcp}{\, \vdash_{\scriptstyle inf}' \,}
+\newcommand{\genrel}{\, \vdash^{\scriptstyle gen} \,}
+\newcommand{\asubty}[2]{(#1 \leq_a #2)}
+\newcommand{\ssubty}[2]{(#1 \leq_s #2)}
+\newcommand{\fsubty}[2]{(#1 \leq_f #2)}
+\newcommand{\subty}[2]{(#1 \leq #2)}
+\newcommand{\doubleb}[1]{[\![ #1 ]\!]}
+\newcommand{\id}[1]{\mbox{\it #1}}
+
+
+\newcommand{\mynote}[1]{$\spadesuit${\bf #1}$\clubsuit$}
+
+% spacing
+
+\newcommand{\sgap}{\quad}
+\newcommand{\bgap}{\quad\quad}
+
+% reserved words
+
+\newcommand{\mathem}{\sf}
+\newcommand{\IN}{\mbox{\mathem in}}
+\newcommand{\LET}{\mbox{\mathem let}}
+\newcommand{\MLET}{\mbox{\mathem mlet}}
+\newcommand{\LETREC}{\mbox{\mathem letrec}}
+\newcommand{\FIX}{\mbox{\mathem fix}}
+\newcommand{\CASE}{\mbox{\mathem case}}
+\newcommand{\TYCASE}{\mbox{\mathem typecase}}
+\newcommand{\ELSE}{\mbox{\mathem else}}
+\newcommand{\IF}{\mbox{\mathem if}}
+\newcommand{\OF}{\mbox{\mathem of}}
+\newcommand{\THEN}{\mbox{\mathem then}}
+\newcommand{\INST}{\mbox{\mathem instance}}
+\newcommand{\OVER}{\mbox{\mathem overload}}
+\newcommand{\CLASS}{\mbox{\mathem class}}
+\newcommand{\WHERE}{\mbox{\mathem where}}
+
+
+%%% Local Variables: 
+%%% mode: latex
+%%% TeX-master: "bta"
+%%% End: 
